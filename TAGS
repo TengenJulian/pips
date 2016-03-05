@@ -1,0 +1,511 @@
+
+./Main2.hs,17
+main main34,35
+
+./Setup.hs,15
+main main1,2
+
+./Main.hs,327
+main main38,39
+senseInput senseInput128,129
+senseInput senseInput129,130
+actuate actuate136,137
+actuate actuate137,138
+actuateS actuateS143,144
+actuateS actuateS144,145
+actuateDebug actuateDebug149,150
+actuateDebug actuateDebug150,151
+benchIOAction benchIOAction155,156
+benchIOAction benchIOAction156,157
+
+./TUI/Table.hs,916
+module TUI.Table TUI.Table2,3
+data Table Table22,23
+data Table h e = Table Table22,23
+  _tableName _tableName23,24
+  , _rowWithHighlights _rowWithHighlights24,25
+  , _tableLists _tableLists25,26
+data RowMode RowMode28,29
+data RowMode = Selected Selected28,29
+data RowMode = Selected | Highlighted Highlighted28,29
+data RowMode = Selected | Highlighted | Normal Normal28,29
+makeTable makeTable30,31
+makeTable makeTable31,32
+instance instance37,38
+renderTable renderTable43,44
+renderTable renderTable44,45
+transformTableCell transformTableCell54,55
+transformTableCell transformTableCell56,57
+tableMoveTo tableMoveTo58,59
+tableMoveTo tableMoveTo59,60
+tableCellT tableCellT65,66
+tableCellT tableCellT66,67
+tableAddHighlight tableAddHighlight68,69
+tableAddHighlight tableAddHighlight69,70
+tableSetHighlight tableSetHighlight71,72
+tableSetHighlight tableSetHighlight72,73
+
+./dist/dist-sandbox-c398c013/setup/setup.hs,19
+import import0,1
+
+./dist/dist-sandbox-c398c013/build/autogen/Paths_final_lab.hs,968
+module Paths_final_lab Paths_final_lab0,1
+catchIO catchIO11,12
+catchIO catchIO12,13
+version version14,15
+version version15,16
+bindir, libdir, datadir, libexecdir, sysconfdir sysconfdir16,17
+bindir, libdir, datadir, libexecdir,libexecdir16,17
+bindir, libdir, datadir,datadir16,17
+bindir, libdir,libdir16,17
+bindir,bindir16,17
+bindir bindir18,19
+libdir libdir19,20
+datadir datadir20,21
+libexecdir libexecdir21,22
+sysconfdir sysconfdir22,23
+getBinDir, getLibDir, getDataDir, getLibexecDir, getSysconfDir getSysconfDir24,25
+getBinDir, getLibDir, getDataDir, getLibexecDir,getLibexecDir24,25
+getBinDir, getLibDir, getDataDir,getDataDir24,25
+getBinDir, getLibDir,getLibDir24,25
+getBinDir,getBinDir24,25
+getBinDir getBinDir25,26
+getLibDir getLibDir26,27
+getDataDir getDataDir27,28
+getLibexecDir getLibexecDir28,29
+getSysconfDir getSysconfDir29,30
+getDataFileName getDataFileName31,32
+getDataFileName getDataFileName32,33
+
+./dist/build/autogen/Paths_final_lab.hs,968
+module Paths_final_lab Paths_final_lab0,1
+catchIO catchIO11,12
+catchIO catchIO12,13
+version version14,15
+version version15,16
+bindir, libdir, datadir, libexecdir, sysconfdir sysconfdir16,17
+bindir, libdir, datadir, libexecdir,libexecdir16,17
+bindir, libdir, datadir,datadir16,17
+bindir, libdir,libdir16,17
+bindir,bindir16,17
+bindir bindir18,19
+libdir libdir19,20
+datadir datadir20,21
+libexecdir libexecdir21,22
+sysconfdir sysconfdir22,23
+getBinDir, getLibDir, getDataDir, getLibexecDir, getSysconfDir getSysconfDir24,25
+getBinDir, getLibDir, getDataDir, getLibexecDir,getLibexecDir24,25
+getBinDir, getLibDir, getDataDir,getDataDir24,25
+getBinDir, getLibDir,getLibDir24,25
+getBinDir,getBinDir24,25
+getBinDir getBinDir25,26
+getLibDir getLibDir26,27
+getDataDir getDataDir27,28
+getLibexecDir getLibexecDir28,29
+getSysconfDir getSysconfDir29,30
+getDataFileName getDataFileName31,32
+getDataFileName getDataFileName32,33
+
+./Pips/Instruction.hs,1916
+module Pips.Instruction Pips.Instruction0,1
+data OpCode OpCode5,6
+data OpCode = ROpc ROpc5,6
+data OpCode = ROpc | AddiOpc AddiOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc LuiOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc LwOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc SwOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc BeqOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc BneOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc | JOpc JOpc5,6
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc | JOpc | JrOpc JrOpc5,6
+instance instance7,8
+data Instruction Instruction28,29
+  Instruction Instruction29,30
+    opCode opCode30,31
+    , instType instType31,32
+    , rs rs32,33
+    , rt rt33,34
+    , rd rd34,35
+    , address address35,36
+    , shamt shamt36,37
+    , aluOp aluOp37,38
+    , original original38,39
+    , immediate immediate39,40
+    , lineNum lineNum40,41
+nop nop43,44
+nop nop44,45
+data InstructionType InstructionType46,47
+data InstructionType = R R46,47
+data InstructionType = R | I I46,47
+data InstructionType = R | I | J J46,47
+data AluOp AluOp48,49
+data AluOp = AddOp AddOp48,49
+data AluOp = AddOp | SubOp SubOp48,49
+data AluOp = AddOp | SubOp | AndOp AndOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp OrOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp SllOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp | SrlOp SrlOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp | SrlOp | SltOp SltOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp | SrlOp | SltOp | JrOp JrOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp | SrlOp | SltOp | JrOp | XorOp XorOp48,49
+data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp | SrlOp | SltOp | JrOp | XorOp | LuiOp LuiOp48,49
+
+./Pips/Parser.hs,668
+module Parser Parser0,1
+data InstructionName InstructionName15,16
+data InstructionName = InstructionName InstructionName15,16
+data NameValue NameValue16,17
+data NameValue a = Name Name16,17
+data NameValue a = Name String | Value Value16,17
+data Token Token17,18
+  IToken IToken18,19
+  | LabelToken LabelToken19,20
+  | CommentToken CommentToken20,21
+lexer lexer23,24
+commaSep commaSep48,49
+commaSep1 commaSep149,50
+instructionName instructionName51,52
+instructionName instructionName52,53
+number number54,55
+number number55,56
+indentifier indentifier63,64
+indentifier indentifier64,65
+comment comment70,71
+comment comment71,72
+
+./Pips/Architecture.hs,510
+module Pips.Architecture Pips.Architecture1,2
+data ArchitectureComp ArchitectureComp13,14
+data ArchitectureComp = ArchitectureComp ArchitectureComp13,14
+  dMemory dMemory14,15
+  , dRegister dRegister15,16
+  , dInstructions dInstructions16,17
+  , dMemoryChange dMemoryChange17,18
+  , dRegisterChange dRegisterChange18,19
+  , dLineNum dLineNum19,20
+  , dDebug dDebug20,21
+init16x16 init16x1623,24
+init16x16 init16x1624,25
+architecture architecture35,36
+architecture architecture36,37
+
+./Pips/Assembler.hs,2302
+module Pips.Assembler Pips.Assembler0,1
+data Token Token15,16
+data Token = InstToken InstToken15,16
+data Token = InstToken Instruction | CommentToken CommentToken15,16
+data Token = InstToken Instruction | CommentToken String | Label Label15,16
+data Token = InstToken Instruction | CommentToken String | Label String | OtherOther15,16
+           | RegToken RegToken16,17
+           | RegToken [DataEntry]  | MemToken MemToken16,17
+type Globals Globals19,20
+assemble assemble23,24
+assemble assemble24,25
+showLeft showLeft28,29
+showLeft showLeft29,30
+wasm wasm32,33
+wasm wasm33,34
+processLabels processLabels60,61
+processLabels processLabels61,62
+findLabels findLabels68,69
+findLabels findLabels69,70
+getLabels getLabels77,78
+getLabels getLabels78,79
+identifier identifier90,91
+identifier identifier91,92
+spaces' spaces'97,98
+spaces' spaces'98,99
+jumpLabel jumpLabel100,101
+jumpLabel jumpLabel101,102
+comment comment106,107
+comment comment107,108
+comma comma113,114
+comma comma114,115
+number number120,121
+number number121,122
+binToDecimal binToDecimal130,131
+binToDecimal binToDecimal131,132
+data DataEntry DataEntry134,135
+data DataEntry = DataEntry DataEntry134,135
+staticData staticData136,137
+staticData staticData137,138
+pRegData pRegData153,154
+pRegData pRegData154,155
+pMemData pMemData156,157
+pMemData pMemData157,158
+findAlias findAlias159,160
+findAlias findAlias160,161
+register register162,163
+register register163,164
+memAddress memAddress165,166
+memAddress memAddress166,167
+aliasOrNum aliasOrNum168,169
+aliasOrNum aliasOrNum169,170
+keywordToInstPartial keywordToInstPartial178,179
+keywordToInstPartial keywordToInstPartial179,180
+instruction instruction198,199
+instruction instruction199,200
+completePart completePart209,210
+completePart completePart210,211
+completeImmediate completeImmediate258,259
+completeImmediate completeImmediate259,260
+completeLwSw completeLwSw269,270
+completeLwSw completeLwSw270,271
+completeBranch completeBranch281,282
+completeBranch completeBranch282,283
+shifts shifts295,296
+shifts shifts296,297
+mData mData300,301
+mData mData301,302
+rData rData303,304
+rData rData304,305
+jlabels jlabels306,307
+jlabels jlabels307,308
+
+./Pips/flycheck_Components.hs,2559
+module Pips.Components Pips.Components1,2
+data Clock Clock12,13
+data Clock = Rising Rising12,13
+data Clock = Rising | Falling Falling12,13
+flipClock flipClock14,15
+flipClock flipClock15,16
+delayHalfClock delayHalfClock18,19
+delayHalfClock delayHalfClock19,20
+clock clock21,22
+clock clock22,23
+alu alu25,26
+alu alu26,27
+data Control Control41,42
+data Control = Control Control41,42
+  aluSrc aluSrc42,43
+  , branchAct branchAct43,44
+  , memAct memAct44,45
+  , regAct regAct45,46
+  , regWriteDst regWriteDst46,47
+  , regWriteData regWriteData47,48
+data BranchAct BranchAct50,51
+data BranchAct = PC4 PC450,51
+data BranchAct = PC4     | Jump Jump50,51
+data BranchAct = PC4     | Jump  | Branch Branch50,51
+data BranchAct = PC4     | Jump  | Branch    | JumpReg JumpReg50,51
+data AluSrc AluSrc51,52
+data AluSrc    = Shamt Shamt51,52
+data AluSrc    = Shamt   | Reg Reg51,52
+data AluSrc    = Shamt   | Reg   | Immediate Immediate51,52
+data AluSrc    = Shamt   | Reg   | Immediate | Address Address51,52
+data RegDst RegDst52,53
+data RegDst    = Rs Rs52,53
+data RegDst    = Rs      | Rt Rt52,53
+data RegDst    = Rs      | Rt    | Rd Rd52,53
+data RegData RegData53,54
+data RegData   = MemData MemData53,54
+data RegData   = MemData | AluOut AluOut53,54
+data DataAct DataAct54,55
+data DataAct   = Write Write54,55
+data DataAct   = Write   | Read Read54,55
+control control56,57
+control control57,58
+safeGet safeGet92,93
+safeGet safeGet93,94
+instMem instMem98,99
+instMem instMem99,100
+data RegComp RegComp103,104
+data RegComp = RegComp RegComp103,104
+    regData regData104,105
+    , regA regA105,106
+    , regB regB106,107
+    , deltaReg deltaReg107,108
+initMem initMem110,111
+initMem initMem111,112
+regMem regMem113,114
+regMem regMem114,115
+data MemComp MemComp124,125
+data MemComp = MemComp MemComp124,125
+    memData memData125,126
+    , memOutput memOutput126,127
+    , deltaMem deltaMem127,128
+mainMem mainMem130,131
+mainMem mainMem131,132
+aluSrcMutex aluSrcMutex142,143
+aluSrcMutex aluSrcMutex143,144
+writebackMutex writebackMutex150,151
+writebackMutex writebackMutex151,152
+pcMutex pcMutex156,157
+pcMutex pcMutex157,158
+aluControl aluControl164,165
+aluControl aluControl165,166
+counter counter178,179
+counter counter179,180
+clockSF clockSF184,185
+clockSF clockSF185,186
+testMem testMem187,188
+testMem testMem188,189
+testCircuit testCircuit195,196
+testCircuit testCircuit196,197
+xs xs199,200
+ys ys200,201
+
+./Pips/Components.hs,2559
+module Pips.Components Pips.Components1,2
+data Clock Clock12,13
+data Clock = Rising Rising12,13
+data Clock = Rising | Falling Falling12,13
+flipClock flipClock14,15
+flipClock flipClock15,16
+delayHalfClock delayHalfClock18,19
+delayHalfClock delayHalfClock19,20
+clock clock21,22
+clock clock22,23
+alu alu25,26
+alu alu26,27
+data Control Control41,42
+data Control = Control Control41,42
+  aluSrc aluSrc42,43
+  , branchAct branchAct43,44
+  , memAct memAct44,45
+  , regAct regAct45,46
+  , regWriteDst regWriteDst46,47
+  , regWriteData regWriteData47,48
+data BranchAct BranchAct50,51
+data BranchAct = PC4 PC450,51
+data BranchAct = PC4     | Jump Jump50,51
+data BranchAct = PC4     | Jump  | Branch Branch50,51
+data BranchAct = PC4     | Jump  | Branch    | JumpReg JumpReg50,51
+data AluSrc AluSrc51,52
+data AluSrc    = Shamt Shamt51,52
+data AluSrc    = Shamt   | Reg Reg51,52
+data AluSrc    = Shamt   | Reg   | Immediate Immediate51,52
+data AluSrc    = Shamt   | Reg   | Immediate | Address Address51,52
+data RegDst RegDst52,53
+data RegDst    = Rs Rs52,53
+data RegDst    = Rs      | Rt Rt52,53
+data RegDst    = Rs      | Rt    | Rd Rd52,53
+data RegData RegData53,54
+data RegData   = MemData MemData53,54
+data RegData   = MemData | AluOut AluOut53,54
+data DataAct DataAct54,55
+data DataAct   = Write Write54,55
+data DataAct   = Write   | Read Read54,55
+control control56,57
+control control57,58
+safeGet safeGet92,93
+safeGet safeGet93,94
+instMem instMem98,99
+instMem instMem99,100
+data RegComp RegComp103,104
+data RegComp = RegComp RegComp103,104
+    regData regData104,105
+    , regA regA105,106
+    , regB regB106,107
+    , deltaReg deltaReg107,108
+initMem initMem110,111
+initMem initMem111,112
+regMem regMem113,114
+regMem regMem114,115
+data MemComp MemComp124,125
+data MemComp = MemComp MemComp124,125
+    memData memData125,126
+    , memOutput memOutput126,127
+    , deltaMem deltaMem127,128
+mainMem mainMem130,131
+mainMem mainMem131,132
+aluSrcMutex aluSrcMutex142,143
+aluSrcMutex aluSrcMutex143,144
+writebackMutex writebackMutex150,151
+writebackMutex writebackMutex151,152
+pcMutex pcMutex156,157
+pcMutex pcMutex157,158
+aluControl aluControl164,165
+aluControl aluControl165,166
+counter counter178,179
+counter counter179,180
+clockSF clockSF184,185
+clockSF clockSF185,186
+testMem testMem187,188
+testMem testMem188,189
+testCircuit testCircuit195,196
+testCircuit testCircuit196,197
+xs xs199,200
+ys ys200,201
+
+./TUI.hs,3071
+module TUI TUI3,4
+data St St53,54
+    St St54,55
+         _memory _memory55,56
+       , _register _register56,57
+       , _source _source57,58
+       , _widgetFocus _widgetFocus58,59
+       , _numberFormat _numberFormat59,60
+       , _clockCycles _clockCycles60,61
+       , _appMode _appMode61,62
+       , _chanToYampa _chanToYampa62,63
+       , _cycleEditor _cycleEditor63,64
+       , _cycleStepSize _cycleStepSize64,65
+       , _errorMsg _errorMsg65,66
+data AppEvent AppEvent68,69
+data AppEvent = VtyEvent VtyEvent68,69
+              | ChangeEvent ChangeEvent69,70
+              | DataChangeEvent DataChangeEvent70,71
+              | SetDataEvent SetDataEvent71,72
+              | ReloadEvent ReloadEvent72,73
+              | LoadMemory LoadMemory73,74
+              | LoadRegistry LoadRegistry74,75
+data DataChange DataChange77,78
+data DataChange = MemoryChange MemoryChange77,78
+data DataChange = MemoryChange Int Int | RegisterChange RegisterChange77,78
+data AppMode AppMode79,80
+data AppMode = NormalMode NormalMode79,80
+data AppMode = NormalMode | CycleMode CycleMode79,80
+data YampaMessage YampaMessage81,82
+data YampaMessage = CyclesMessage CyclesMessage81,82
+                  | QuitMessageQuitMessage82,83
+                  | RestartMessageRestartMessage83,84
+data NumberFormat NumberFormat86,87
+data NumberFormat = DecimalFormat DecimalFormat86,87
+data NumberFormat = DecimalFormat  | HexFormat HexFormat86,87
+data NumberFormat = DecimalFormat  | HexFormat   | BinaryFormat BinaryFormat86,87
+data Focus Focus87,88
+data Focus = MemTable MemTable87,88
+data Focus = MemTable | RegTable RegTable87,88
+data Focus = MemTable | RegTable | SourceCode SourceCode87,88
+data TableCell TableCell89,90
+data TableCell = StringCell StringCell89,90
+data TableCell = StringCell String | IntCell IntCell89,90
+data TableCell = StringCell String | IntCell Int | ValueCell ValueCell89,90
+drawUI drawUI93,94
+drawUI drawUI94,95
+drawLeftAligned drawLeftAligned131,132
+drawLeftAligned drawLeftAligned132,133
+formatter formatter134,135
+formatter formatter135,136
+drawCell drawCell139,140
+drawCell drawCell140,141
+getFocus getFocus145,146
+getFocus getFocus146,147
+cycleEnum cycleEnum150,151
+cycleEnum cycleEnum151,152
+appEvent appEvent153,154
+appEvent appEvent154,155
+vtyEvent vtyEvent179,180
+vtyEvent vtyEvent180,181
+cycleInputEvent cycleInputEvent198,199
+cycleInputEvent cycleInputEvent199,200
+sendYampaMsg sendYampaMsg213,214
+sendYampaMsg sendYampaMsg214,215
+listDrawElement listDrawElement216,217
+listDrawElement listDrawElement217,218
+initialState initialState223,224
+initialState initialState224,225
+customAttr customAttr256,257
+customAttr customAttr257,258
+highlightAttr highlightAttr259,260
+highlightAttr highlightAttr260,261
+errorAttr errorAttr262,263
+errorAttr errorAttr263,264
+focusAttr focusAttr265,266
+focusAttr focusAttr266,267
+theMap theMap268,269
+theMap theMap269,270
+theApp theApp278,279
+theApp theApp279,280

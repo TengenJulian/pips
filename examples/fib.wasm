@@ -1,0 +1,18 @@
+.register
+0: WORD zero 0
+1: WORD a    1
+2: WORD b    1
+3: WORD temp 0
+
+.memory
+1: WORD result 0
+
+Loop:
+add $temp, $a, $b
+add $a, $b, $zero
+add $b, $temp, $zero
+
+sw $b, result, $zero
+# lw $zero, result, $zero
+
+J Loop

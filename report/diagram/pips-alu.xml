@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<COMPLEX NAME="pips-alu" PREFERREDNUMBERFORMAT="Hexadecimal" PREFERREDCYCLELENGTH="10">
+    <PARAMETERS/>
+    <FORMS>
+        <POLYGON COLOR="#000000">
+            <STROKE LINEWIDTH="2.0"/>
+            <POINT POSX="80.0" POSY="-190.0"/>
+            <POINT POSX="90.0" POSY="-180.0"/>
+            <POINT POSX="80.0" POSY="-170.0"/>
+            <POINT POSX="80.0" POSY="-130.0"/>
+            <POINT POSX="130.0" POSY="-170.0"/>
+            <POINT POSX="130.0" POSY="-190.0"/>
+            <POINT POSX="80.0" POSY="-230.0"/>
+        </POLYGON>
+        <TEXT POSX="110.0" POSY="-180.0" HALIGN="CENTER" VALIGN="CENTER"
+            COLOR="#000000" FONT="Monospaced,plain,14.0">ALU</TEXT>
+    </FORMS>
+    <IO>
+        <INPUT BITS="1" SIGNED="false" POSX="80.0" POSY="-210.0" NAME="RegSrc1">
+            <LABEL POSX="-10.0" POSY="0.0" HALIGN="RIGHT" VALIGN="CENTER"/>
+        </INPUT>
+        <INPUT BITS="1" SIGNED="false" POSX="80.0" POSY="-150.0" NAME="RegSrc2">
+            <LABEL POSX="-10.0" POSY="0.0" HALIGN="RIGHT" VALIGN="CENTER"/>
+        </INPUT>
+        <OUTPUT BITS="1" SIGNED="false" POSX="130.0" POSY="-190.0" NAME="result">
+            <LABEL POSX="10.0" POSY="0.0" HALIGN="LEFT" VALIGN="CENTER"/>
+        </OUTPUT>
+        <OUTPUT BITS="1" SIGNED="false" POSX="130.0" POSY="-170.0" NAME="zero">
+            <LABEL POSX="10.0" POSY="0.0" HALIGN="LEFT" VALIGN="CENTER"/>
+        </OUTPUT>
+        <INPUT BITS="1" SIGNED="false" POSX="100.0" POSY="-210.0" NAME="AluCtrl">
+            <LABEL POSX="20.0" POSY="-20.0" HALIGN="CENTER" VALIGN="TOP"/>
+        </INPUT>
+    </IO>
+    <SUBCOMPONENTS/>
+    <WIRES/>
+</COMPLEX>
