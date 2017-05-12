@@ -59,9 +59,10 @@ executable final-lab
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends: base >=4.8 && <4.9, Yampa >= 0.10, 
+  build-depends: base >=4.8 && <4.10, Yampa == 0.10.0, 
                  parsec >= 3.1.9, lens >= 4.1, vty >= 5, deepseq >= 1.4,
-                 brick >= 0.2.1, vector >= 0.11, transformers>=0.4, data-default >= 0.5, text >= 1.2, containers == 0.5.* 
+                 brick >= 0.2.1 && < 0.4, vector >= 0.11, transformers>=0.4,
+                 data-default >= 0.5, text >= 1.2, containers == 0.5.* 
   
   -- Directories containing source files.
   hs-source-dirs: ., Pips

@@ -74,18 +74,18 @@ preprocessToken regData memData tokens = map m ins
           | otherwise           = token
 
 reg3Assemble :: Token -> Instruction
-reg3Assemble (Reg3Token _ _ (RegNum r1) (RegNum r2) (RegNum r3)) =
-  nop {instType = R, opCode = ROpc, rd = r1, rs = r2, rt = r3}
+reg3Assemble (Reg3Token l _ (RegNum r1) (RegNum r2) (RegNum r3)) =
+  nop {instType = R, opCode = ROpc, rd = r1, rs = r2, rt = r3, lineNum = l}
 reg3Assemble _ = error "Applying reg3Assemble to a non Reg3Token" 
 
 branchAssemble :: Token -> Instruction
-branchAssemble (BranchToken _ _ (RegNum r1) (RegNum r2) (LabelNum offset)) =
-  nop {instType = I, rs = r1, rt = r2, address = offset}
+branchAssemble (BranchToken l _ (RegNum r1) (RegNum r2) (LabelNum offset)) =
+  nop {instType = I, rs = r1, rt = r2, address = offset, lineNum = l}
 branchAssemble _ = error "Applying branchAssembly to a non BranchToken"
 
 memOpAssemble :: Token -> Instruction
-memOpAssemble (MemOpToken _ _ (RegNum r1) (MemAddrNum m1) (RegNum r2)) =
-  nop {instType = I, rt = r1, immediate = m1, rs = r2}
+memOpAssemble (MemOpToken l _ (RegNum r1) (MemAddrNum m1) (RegNum r2)) =
+  nop {instType = I, rt = r1, immediate = m1, rs = r2, lineNum = l}
 memOpAssemble _ = error "Applying memOpAssemble to a non MemOpToken"
 
 assembleToken :: Token -> Instruction
@@ -101,21 +101,21 @@ assembleToken t@(BranchToken _ BneN _ _ _) = (branchAssemble t) {opCode = BneOpc
 assembleToken t@(MemOpToken _ SwN _ _ _) = (memOpAssemble t) {opCode = SwOpc}
 assembleToken t@(MemOpToken _ LwN _ _ _) = (memOpAssemble t) {opCode = LwOpc}
 
-assembleToken (Reg2iToken _ AddiN (RegNum r1) (RegNum r2) imm) =
-  nop {instType = I, opCode = AddiOpc, rt = r1, immediate=imm, rs = r2}
+assembleToken (Reg2iToken l AddiN (RegNum r1) (RegNum r2) imm) =
+  nop {instType = I, opCode = AddiOpc, rt = r1, immediate=imm, rs = r2, lineNum = l}
 
-assembleToken (Reg2iToken _ name (RegNum r1) (RegNum r2) imm) =
+assembleToken (Reg2iToken l name (RegNum r1) (RegNum r2) imm) =
   let aop = if name == SllN then SllOp else SrlOp in
-  nop {rd = r1, immediate=imm, rt = r2, aluOp = aop, opCode = ROpc}
+  nop {rd = r1, immediate=imm, rt = r2, aluOp = aop, opCode = ROpc, lineNum = l}
 
-assembleToken (LuiToken _ (RegNum r1) imm) =
-  nop {instType = I, opCode = LuiOpc, rt = r1, immediate = imm}
+assembleToken (LuiToken l (RegNum r1) imm) =
+  nop {instType = I, opCode = LuiOpc, rt = r1, immediate = imm, lineNum = l}
 
-assembleToken (JrToken _ (RegNum r1)) =
-  nop {instType = R, opCode = ROpc, aluOp = JrOp, rs = r1}
+assembleToken (JrToken l (RegNum r1)) =
+  nop {instType = R, opCode = ROpc, aluOp = JrOp, rs = r1, lineNum = l}
 
-assembleToken (JToken _ (LabelNum l1)) =
-  nop {instType = J, opCode = JOpc, address = l1}
+assembleToken (JToken l (LabelNum l1)) =
+  nop {instType = J, opCode = JOpc, address = l1, lineNum = l}
 
 assembleToken t = error ("Could not assemble token " ++ show t)
 
