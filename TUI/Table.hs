@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
-module TUI.Table where
+module TUI.Table
+  ( module TUI.Table
+  ) where
 
 import Control.Lens
 

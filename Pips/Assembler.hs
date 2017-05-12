@@ -1,310 +1,131 @@
-module Pips.Assembler where
+module Pips.Assembler
+  ( module Pips.Assembler
+  , Pips.Parser.DataEntry (..)
+  ) where
 
+import qualified Data.Map.Lazy as M
+
+import Text.Parsec (parse)
+
+import Pips.Parser
 import Pips.Instruction
-import Text.Parsec
-import Text.Parsec.String
 
-import Data.Bits
-import Data.Char
-import Data.Maybe
+removeRegAlias :: M.Map String Int -> RegName -> RegName
+removeRegAlias _ r@(RegNum _) = r
+removeRegAlias entries (RegAlias name) =
+  case M.lookup name entries of
+    Just r -> RegNum r
+    _      -> error ("Register $" ++ name ++ " not defined.")
 
-import Control.Monad
+removeMemAlias :: M.Map String Int -> MemAddr -> MemAddr
+removeMemAlias _ m@(MemAddrNum _) = m
+removeMemAlias entries (MemAddrAlias name) =
+  case M.lookup name entries of
+    Just a -> MemAddrNum a
+    _      -> error ("Memory Address " ++ name ++ " not defined.")
 
+intervalInsert :: (Ord a) => [(a, b)] -> (a, b) -> [(a, b)]
+intervalInsert is (a, b) = left ++ (a, b) : right
+  where (left, right) = span ((< a) . fst) is
 
--- TODO: convert into a 1-pass + post processing by using raw instruction
+intervalSearch :: (Ord a) => [(a, b)] -> a -> b
+intervalSearch ins x = head [b | (a, b) <- ins, x <= a]
 
-data Token = InstToken Instruction | CommentToken String | Label String | Other
-           | RegToken [DataEntry]  | MemToken [DataEntry]
-           deriving (Show, Eq)
+removeLabelAlias :: [(Int, Int)] -> M.Map String Int -> Label -> Label
+removeLabelAlias _ _ l@(LabelNum _) = l
+removeLabelAlias ivs entries (LabelName name) =
+  case M.lookup name entries of
+    Just l -> LabelNum (intervalSearch ivs l)
+    _      -> error ("Label " ++ name ++ " not defined.")
 
-type Globals = ([DataEntry], [DataEntry], [(String, Int)])
+isInstruction :: Token -> Bool
 
--- This function parses a wasm containing bips assembly, to instructions
--- and data entries.
-assemble :: String -> Either String ([DataEntry], [DataEntry], [Instruction])
-assemble input = do
-  ls <- findLabels input
-  showLeft . parse (wasm ls) "" $ input
+isInstruction ins = case ins of
+  CommentToken _ _ -> False
+  LabelToken _ _   -> False
+  _                -> True
+
+-- | This function removes memory/register aliases and converts jump targets in source lines,
+-- to jump target in PC offset.
+preprocessToken :: [DataEntry] -> [DataEntry] -> [Token] -> [Token]
+preprocessToken regData memData tokens = map m ins
+  where labels = [l | l@(LabelToken _ _) <- tokens]
+        ins = filter isInstruction tokens
+
+        rra = removeRegAlias (M.fromList [(name, r) | DataEntry r (Just name) _ <- regData])
+        rma = removeMemAlias (M.fromList [(name, a) | DataEntry a (Just name) _ <- memData])
+
+        lines' = map tokenLineNum ins
+        ivs = foldl intervalInsert [(maxBound, length ins - 1)] (zip lines' [0..])
+        rla = removeLabelAlias ivs (M.fromList [(name, l) | LabelToken l name <- labels])
+
+        m (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)
+        m (Reg3Token l name r1 r2 r3)      = Reg3Token   l name (rra r1) (rra r2) (rra r3)
+        m (MemOpToken l name r1 m1 r2)     = MemOpToken  l name (rra r1) (rma m1) (rra r2)
+        m (Reg2iToken l name r1 r2 v)      = Reg2iToken  l name (rra r1) (rra r2) v
+
+        m (LuiToken l r1 v) = LuiToken l (rra r1) v
+
+        m (JrToken l r1)   = JrToken l (rra r1)
+        m (JToken l label) = JToken  l (rla label)
+
+        m token
+          | isInstruction token = error ("preprocess Token not implemented for " ++ show token)
+          | otherwise           = token
+
+reg3Assemble :: Token -> Instruction
+reg3Assemble (Reg3Token _ _ (RegNum r1) (RegNum r2) (RegNum r3)) =
+  nop {instType = R, opCode = ROpc, rd = r1, rs = r2, rt = r3}
+reg3Assemble _ = error "Applying reg3Assemble to a non Reg3Token" 
+
+branchAssemble :: Token -> Instruction
+branchAssemble (BranchToken _ _ (RegNum r1) (RegNum r2) (LabelNum offset)) =
+  nop {instType = I, rs = r1, rt = r2, address = offset}
+branchAssemble _ = error "Applying branchAssembly to a non BranchToken"
+
+memOpAssemble :: Token -> Instruction
+memOpAssemble (MemOpToken _ _ (RegNum r1) (MemAddrNum m1) (RegNum r2)) =
+  nop {instType = I, rt = r1, immediate = m1, rs = r2}
+memOpAssemble _ = error "Applying memOpAssemble to a non MemOpToken"
+
+assembleToken :: Token -> Instruction
+assembleToken t@(Reg3Token _ AddN _ _ _) = (reg3Assemble t) {aluOp = AddOp}
+assembleToken t@(Reg3Token _ SubN _ _ _) = (reg3Assemble t) {aluOp = SubOp}
+assembleToken t@(Reg3Token _ AndN _ _ _) = (reg3Assemble t) {aluOp = AndOp}
+assembleToken t@(Reg3Token _ XorN _ _ _) = (reg3Assemble t) {aluOp = XorOp}
+assembleToken t@(Reg3Token _  OrN _ _ _) = (reg3Assemble t) {aluOp = OrOp}
+
+assembleToken t@(BranchToken _ BeqN _ _ _) = (branchAssemble t) {opCode = BeqOpc}
+assembleToken t@(BranchToken _ BneN _ _ _) = (branchAssemble t) {opCode = BneOpc}
+
+assembleToken t@(MemOpToken _ SwN _ _ _) = (memOpAssemble t) {opCode = SwOpc}
+assembleToken t@(MemOpToken _ LwN _ _ _) = (memOpAssemble t) {opCode = LwOpc}
+
+assembleToken (Reg2iToken _ AddiN (RegNum r1) (RegNum r2) imm) =
+  nop {instType = I, opCode = AddiOpc, rt = r1, immediate=imm, rs = r2}
+
+assembleToken (Reg2iToken _ name (RegNum r1) (RegNum r2) imm) =
+  let aop = if name == SllN then SllOp else SrlOp in
+  nop {rd = r1, immediate=imm, rt = r2, aluOp = aop, opCode = ROpc}
+
+assembleToken (LuiToken _ (RegNum r1) imm) =
+  nop {instType = I, opCode = LuiOpc, rt = r1, immediate = imm}
+
+assembleToken (JrToken _ (RegNum r1)) =
+  nop {instType = R, opCode = ROpc, aluOp = JrOp, rs = r1}
+
+assembleToken (JToken _ (LabelNum l1)) =
+  nop {instType = J, opCode = JOpc, address = l1}
+
+assembleToken t = error ("Could not assemble token " ++ show t)
 
 showLeft :: Show a => Either a b -> Either String b
 showLeft (Right x) = Right x
 showLeft (Left err)  = Left (show err)
 
-wasm :: [(String, Int)] -> Parser ([DataEntry], [DataEntry], [Instruction])
-wasm labels = do
-  startingToken <- many (pRegData <|> pMemData <|> comment)
-
-  let rawmData = [d | MemToken d <- startingToken]
-      rawrData = [d | RegToken d <- startingToken]
-
-  when (length rawmData > 1) $ fail "Multiple memory segments defined."
-  when (length rawrData > 1) $ fail "Multiple registery segments defined."
-
-  let mData = concat rawmData
-      rData = concat rawrData
-
-  let single = comment <|> try jumpLabel <|> (instruction (mData, rData, labels))
-
-  tokens <- single `endBy` (eof<|> spaces)
-
-  return (rData, mData, processLabels [inst | InstToken inst <- tokens])
-
--- The ugly part of matching a jump label to the proper instruction address
--- This is done by comparing the line number in the source code with actual offset
--- in memory.
---     For example if a jump or a branch instructions says to jump to line n,
--- compare it with the list of instruction and look where they appeared in the source file.
--- It should jump to the instruction i, that appeared on a line number that is the closest to n,
--- but appeared on a line number that is equal or higher than n.
---     Before this stage, the jump address points to the line number in the source code,
--- not to the location of the instruction in the instruction memory.
-processLabels :: [Instruction] -> [Instruction]
-processLabels insts = map f insts
-  where lineNums = zipWith (\inst real -> (lineNum inst, real)) insts [0..] ++ [(maxBound, maxBound)]
-        getRealInstAddr li = snd . head . dropWhile ((< li) . fst) $ lineNums
-        needsLabel inst = opCode inst `elem` [BeqOpc, BneOpc, JOpc]
-        f inst | needsLabel inst = inst {address = getRealInstAddr (immediate inst)}
-               | otherwise       = inst
-
-findLabels :: String -> Either String [(String, Int)]
-findLabels input = do
-  let ilines = zip [0..] . lines $ input
-  r <- forM ilines $ \(i, x) -> do
-    ls <- getLabels x
-    mapM (\l -> return (l, i)) ls
-
-  return $ concat r
-
-getLabels :: String -> Either String [String]
-getLabels input = showLeft $ parse p "" input
-  where p = do
-          let word = many1 (letter <|> digit <|> oneOf ".$-_,#")
-
-          many (pRegData <|> pMemData <|> comment)
-          tokens <- many (try jumpLabel
-                          <|> (spaces' >> return Other)
-                          <|> (word >> return Other)
-                          <|> (number >> spaces >> char ':' >> return Other)
-                         )
-          return [l | Label l <- tokens]
-
-identifier :: Parser String
-identifier = do
-  l <- letter
-  rest <- many (letter <|> digit)
-
-  return (l : rest)
-
-spaces' :: Parser ()
-spaces' = skipMany1 space
-
-jumpLabel :: Parser Token
-jumpLabel = fmap Label $ do
-  l <- identifier
-  char ':'
-  return l
-
-comment :: Parser Token
-comment = fmap CommentToken $ do
-  c <- char '#'
-  rest <- many (noneOf "\n\r")
-
-  return (c : rest)
-
-comma :: Parser Char
-comma = do
-  spaces
-  c <- char ','
-  spaces
-  return c
-
-number :: Parser Int
-number = do
-  prefix <- try (string "0x") <|> try (string "0b") <|> fmap (:[]) digit
-
-  case prefix of
-    "0x" -> fmap (read . ("0x"++)) $ many1 hexDigit
-    "0b" -> fmap binToDecimal $ many1 (oneOf "01")
-    _    -> fmap (read . (prefix ++ )) $ many digit
-
-
-binToDecimal :: String -> Int
-binToDecimal str = foldl (\acc (d, i) -> acc .|. (shiftL d i)) 0 $ zip (reverse bits) [0..]
-  where bits = map digitToInt str
-
-data DataEntry = DataEntry Int (Maybe String) Int deriving (Show, Eq)
-
-staticData :: Parser [DataEntry]
-staticData = do
-  let single = do
-        location <- fmap read $ many1 digit
-        spaces
-        char ':'
-        spaces
-        string "WORD"
-        spaces
-        alias <- optionMaybe identifier
-        spaces
-        value <- number
-
-        return $ DataEntry location alias value
-
-  single `endBy` spaces
-
-pRegData :: Parser Token
-pRegData = fmap RegToken $ try (string ".register") >> spaces >> staticData
-
-pMemData :: Parser Token
-pMemData = fmap MemToken $ try (string ".memory") >> spaces >> staticData
-
-findAlias :: [DataEntry] -> String -> Maybe Int
-findAlias entries alias = listToMaybe [loc | DataEntry loc alias' _ <- entries, alias' == Just alias]
-
-register :: [DataEntry] -> Parser Int
-register entries = char '$' >> aliasOrNum entries (\name -> "$" ++ name ++ " is not defined.")
-
-memAddress :: [DataEntry] -> Parser Int
-memAddress entries = aliasOrNum entries (\name -> "Address " ++ name ++ " is not defined.")
-
-aliasOrNum :: [DataEntry] -> (String -> String) -> Parser Int
-aliasOrNum entries f = do
-  name <- optionMaybe identifier
-  case name of
-    Nothing -> fmap read $ many1 digit
-    Just n  ->
-      case findAlias entries n of
-        Just reg -> return reg
-        Nothing  -> fail $ f n
-
-keywordToInstPartial :: String -> Maybe Instruction
-keywordToInstPartial "add" = Just $ nop {instType = R, opCode = ROpc, aluOp = AddOp}
-keywordToInstPartial "sub" = Just $ nop {instType = R, opCode = ROpc, aluOp = SubOp}
-keywordToInstPartial "and" = Just $ nop {instType = R, opCode = ROpc, aluOp = AndOp}
-keywordToInstPartial "or"  = Just $ nop {instType = R, opCode = ROpc, aluOp = OrOp }
-keywordToInstPartial "sll" = Just $ nop {instType = R, opCode = ROpc, aluOp = SllOp}
-keywordToInstPartial "srl" = Just $ nop {instType = R, opCode = ROpc, aluOp = SrlOp}
-keywordToInstPartial "slt" = Just $ nop {instType = R, opCode = ROpc, aluOp = SltOp}
-keywordToInstPartial "jr"  = Just $ nop {instType = R, opCode = ROpc, aluOp = JrOp }
-
-keywordToInstPartial "addi" = Just $ nop {instType = I, opCode = AddiOpc }
-keywordToInstPartial "lui"  = Just $ nop {instType = I, opCode = LuiOpc  }
-keywordToInstPartial "lw"   = Just $ nop {instType = I, opCode = LwOpc   }
-keywordToInstPartial "sw"   = Just $ nop {instType = I, opCode = SwOpc   }
-keywordToInstPartial "beq"  = Just $ nop {instType = I, opCode = BeqOpc  }
-keywordToInstPartial "bne"  = Just $ nop {instType = I, opCode = BneOpc  }
-
-keywordToInstPartial "j"    = Just $ nop {instType = J, opCode = JOpc    }
-keywordToInstPartial _      = Nothing
-
-instruction :: Globals -> Parser Token
-instruction gs = do
-  name <- identifier
-  let mPartial = keywordToInstPartial $ map toLower name
-
-  lineNum' <- fmap ((+(-1)) . sourceLine) getPosition
-
-  case mPartial of
-    Nothing      -> fail $ "Unknown command " ++ name
-    Just partial -> spaces >> (fmap InstToken $ completePart gs (partial {lineNum = lineNum'}))
-
-completePart :: Globals -> Instruction -> Parser Instruction
-completePart entries inst@(Instruction {instType = R, aluOp=SllOp}) = shifts (rData entries) inst
-completePart entries inst@(Instruction {instType = R, aluOp=SrlOp}) = shifts (rData entries) inst
-
-completePart entries inst@(Instruction {instType = R, aluOp=JrOp}) = do
-  rs' <- register (rData entries)
-  return inst{rs = rs'}
-
-completePart entries inst@(Instruction {instType = R}) = do
-  rd' <- register (rData entries)
-  comma
-
-  rs' <- register (rData entries)
-  comma
-
-  rt' <- register (rData entries)
-
-  return inst{rd = rd', rs = rs', rt = rt'}
-
-completePart entries inst@(Instruction {instType = I, opCode=AddiOpc}) = do
-  (rt' ,rs', imm) <- completeImmediate (rData entries)
-  return inst{rt = rt', immediate=imm, rs = rs'}
-
-completePart entries inst@(Instruction {instType = I, opCode=LuiOpc}) = do
-  rt' <- register (rData entries)
-  comma
-
-  imm <- number
-  return inst {rt = rt', immediate=imm}
-
-completePart entries inst@(Instruction {instType = I, opCode=LwOpc}) = do
-  (rt', imm, rs') <- completeLwSw entries
-  return inst {rt = rt', immediate = imm, rs = rs'}
-
-completePart entries inst@(Instruction {instType = I, opCode=SwOpc}) = do
-  (rt', imm, rs') <- completeLwSw entries
-  return inst {rt = rt', immediate = imm, rs = rs'}
-
-completePart entries inst@(Instruction {instType = I}) = do
-  (rs', rt', jl) <- completeBranch (rData entries) (jlabels entries)
-  return inst {rt = rt', rs = rs', address = jl}
-
-completePart entries inst@(Instruction {instType = J}) = do
-  l <- identifier
-  let mPc = lookup l (jlabels entries)
-  case mPc of
-    Nothing -> fail $ "Undefined label: " ++ l
-    Just pc -> return inst {address = pc}
-
-completeImmediate :: [DataEntry] -> Parser (Int, Int, Int)
-completeImmediate entries = do
-  r1 <- register entries
-  comma
-
-  r2 <- register entries
-  comma
-
-  imm <- number
-  return (r1, r2, imm)
-
-completeLwSw :: Globals -> Parser (Int, Int, Int)
-completeLwSw entries = do
-  r1 <- register $ rData entries
-  comma
-
-  imm <- memAddress $ mData entries
-  comma
-
-  r2 <- register $ rData entries
-
-  return (r1, imm, r2)
-
-completeBranch :: [DataEntry] -> [(String, Int)] -> Parser (Int, Int, Int)
-completeBranch entries ls = do
-  r1 <- register entries
-  comma
-
-  r2 <- register entries
-  comma
-
-  label' <- identifier
-  let mPc = lookup label' ls
-  case mPc of
-    Nothing -> fail $ "Undefined label: " ++ label'
-    Just pc -> return (r1, r2, pc)
-
-shifts :: [DataEntry] -> Instruction -> Parser Instruction
-shifts entries inst = do
-  (rd' ,rt', shamt') <- completeImmediate entries
-  return inst{rd = rd', rt = rt', shamt=shamt'}
-
-mData :: Globals -> [DataEntry]
-mData (x, _, _) = x
-
-rData :: Globals -> [DataEntry]
-rData (_, x, _) = x
-
-jlabels :: Globals -> [(String, Int)]
-jlabels (_, _, x) = x
-
-
+assemble :: String -> Either String ([DataEntry], [DataEntry], [Instruction])
+assemble source = do
+  (regData, memData, tokens) <- showLeft $ parse parseFile "" source
+  let ints = map assembleToken (preprocessToken regData memData tokens)
+
+  return (regData, memData, ints)

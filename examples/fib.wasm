@@ -13,6 +13,5 @@ add $a, $b, $zero
 add $b, $temp, $zero
 
 sw $b, result, $zero
-# lw $zero, result, $zero
 
-J Loop
+j Loop

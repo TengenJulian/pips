@@ -36,6 +36,7 @@ import System.Exit
 import System.CPUTime
 import System.Environment
 
+main :: IO ()
 main = do
   source <- readFile "examples/fib.wasm"
   let res  = assemble source
@@ -44,6 +45,7 @@ main = do
   when (isLeft res) $ do
     putStrLn err
     exitFailure
+
   let Right (reg, mem, insts) = res
   print reg
   print mem
@@ -122,6 +124,7 @@ main = do
         archComp' <- readIORef resultRef
         writeChan chanToUi (ChangeEvent 1 archComp')
 
+  putStrLn "Startin business"
   void $ M.customMain (V.mkVty def) chanToUi theApp
        $ initialState chanToYampa source (matchAlias (dRegister arch) reg)
        $ matchAlias (dMemory   arch) mem

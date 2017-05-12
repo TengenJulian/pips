@@ -1,7 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
-module TUI where
+module TUI
+  ( module TUI
+  , module TUI.Table
+  ) where
 
 import Pips.Architecture (ArchitectureComp, dLineNum, dMemory, dRegister, dRegisterChange, dMemoryChange)
 
@@ -10,18 +13,17 @@ import TUI.Table
 import Numeric.Lens
 import Control.Lens
 import Control.Monad.IO.Class(liftIO, MonadIO)
-import Control.Concurrent (Chan, newChan, writeChan, readChan)
+import Control.Concurrent (Chan, writeChan, readChan)
 
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
 
-import Data.Maybe
 import Data.Monoid
 import Data.Data.Lens()
 import Data.Vector.Lens()
 import qualified Data.Vector as V
 
-import Data.Text (pack, Text)
+import Data.Text (Text)
 import qualified Data.Text as T (null)
 
 import qualified Graphics.Vty as V

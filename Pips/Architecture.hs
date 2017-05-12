@@ -1,5 +1,7 @@
 {-# LANGUAGE Arrows #-}
-module Pips.Architecture where
+module Pips.Architecture
+  ( module Pips.Architecture
+  ) where
 
 import FRP.Yampa
 
@@ -31,7 +33,7 @@ init16x16 reg mem inst = ArchitectureComp {
   , dLineNum = 0
   , dDebug = ""
   }
-  where emptyData = S.take 16 $ S.fromList [0, 0..]
+  where emptyData = S.fromList $ replicate 16 0
 
 architecture :: ArchitectureComp -> SF Bool ArchitectureComp
 architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = insts} =

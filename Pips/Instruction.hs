@@ -1,7 +1,6 @@
-module Pips.Instruction where
-
-import Data.Bits
-import FRP.Yampa
+module Pips.Instruction
+  ( module Pips.Instruction
+  ) where
 
 data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc | JOpc | JrOpc  deriving (Eq, Show)
 

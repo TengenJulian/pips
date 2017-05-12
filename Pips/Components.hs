@@ -1,11 +1,14 @@
 {-# LANGUAGE Arrows #-}
-module Pips.Components where
+module Pips.Components
+  ( module Pips.Components
+  ) where
 
 import FRP.Yampa
 import Data.Bits
 
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
+
 
 import Pips.Instruction
 import Pips.Assembler
@@ -20,7 +23,7 @@ delayHalfClock :: a -> SF a a
 delayHalfClock = delay 10
 
 clock :: SF Clock Clock
-clock = loopPre Falling $ proc (input, state) ->
+clock = loopPre Falling $ proc (_, state) ->
   returnA -< (flipClock state, flipClock state)
 
 alu :: SF (AluOp, Int, Int) (Int, Bool)
