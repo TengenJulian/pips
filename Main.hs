@@ -1,80 +1,97 @@
 import FRP.Yampa
 
+import Data.Char (digitToInt, isDigit)
 import Data.IORef
 import Data.List
-import Data.Maybe
 import Data.Either
-import Data.Default
 import Data.Foldable (toList)
 
-import Debug.Trace
+import Lens.Micro
 
-import Control.Lens
 import Control.Monad
 import Control.DeepSeq
-import Control.Concurrent (newChan, writeChan, readChan, threadDelay, forkIO)
+import Control.Concurrent (forkIO)
 
-import Data.Sequence (Seq)
-import qualified Data.Sequence as S
+import Text.Parsec (parse)
 
-import Pips.Assembler
-import Pips.Components
-import Pips.Instruction
-import Pips.Architecture
-
-import Numeric.Lens
-
-import Text.Parsec
-import Text.Parsec.String
-
+import Brick.BChan
 import qualified Brick.Main as M
 import qualified Graphics.Vty as V
-
-import TUI
+import Graphics.Vty.Config (defaultConfig)
 
 import System.Exit
 import System.CPUTime
 import System.Environment
 
-main :: IO ()
-main = do
-  source <- readFile "examples/fib.wasm"
-  let res  = assemble source
-      Left err                = res
+import Pips.Parser (parseFile)
+import Pips.Assembler
+import Pips.Architecture
+
+import TUI
+
+senseInput :: Bool -> Bool -> IO (DTime, Maybe Bool)
+senseInput debug _
+  | False        = return (0.0, Just debug)
+  | otherwise    = do
+    input <- getLine
+    putStrLn $ "input: " ++ input
+    return (10.0, Just debug)
+
+actuate :: IORef Bool -> IORef a -> Bool -> a -> IO Bool
+actuate doneRef resultRef _ output = do
+  done <- readIORef doneRef
+
+  writeIORef resultRef output
+  return done
+
+actuateDebug :: Bool -> ArchitectureComp -> IO Bool
+actuateDebug _ archComp = do
+  putStrLn $ dDebug archComp
+  return False
+
+-- | Returns the number of seconds it took the action to complete.
+benchIOAction :: NFData b => IO b -> IO Double
+benchIOAction a = do
+  start <- getCPUTime
+  r <- a
+  end <- r `deepseq` getCPUTime
+
+  return $ fromIntegral (end - start) / (10^12)
+
+run :: String -> Bool -> Maybe Integer -> IO ()
+run sourceFile debugMode benchmarkCycles = do
+
+  s <- readFile sourceFile
+  let source = s ++ "\n "
+  let res    = assemble source
 
   when (isLeft res) $ do
+    let Left err = res
     putStrLn err
     exitFailure
 
   let Right (reg, mem, insts) = res
-  print reg
-  print mem
 
-  --putStrLn "Starting...\n-----------------------"
   let arch = init16x16 reg mem insts
       archSF = architecture arch
+
       matchAlias dat entries = foldl (\acc (loc, al) -> acc & ix loc . _1 .~ al) (map (\x -> ("", x)) (toList dat)) alias
         where alias = [(loc, al) | DataEntry loc (Just al) _ <- entries]
 
-  args <- getArgs
-  when ("--debug" `elem` args) $ do
+  when debugMode $ do
     reactimate (return True) (senseInput True) actuateDebug archSF
     exitSuccess
 
-  chanToUi    <- newChan
-  chanToYampa <- newChan
-  doneRef     <- newIORef False
-  resultRef   <- newIORef arch
+  chanToUi     <- newBChan 16
+  chanToYampa' <- newBChan 16
+  doneRef      <- newIORef False
+  resultRef    <- newIORef arch
 
   handle' <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
   handleRef <- newIORef handle'
 
-  let benchmakCycles = do
-        i      <- elemIndex "--benchmark" args
-        cycles <- args ^? ix (i + 1)
-        cycles ^? decimal
-  when (has _Just benchmakCycles) $ do
-    let Just cycles = benchmakCycles
+  when (has _Just benchmarkCycles) $ do
+    let Just cycles = benchmarkCycles
 
     sec <- benchIOAction $
       forM_ [2..cycles] $
@@ -85,10 +102,10 @@ main = do
     exitSuccess
 
   ref <- readIORef resultRef
-  writeChan chanToUi (ChangeEvent 1 ref)
+  writeBChan chanToUi (ChangeEvent 1 ref)
 
   forkIO . forever $ do
-    msg    <- readChan chanToYampa
+    msg    <- readBChan chanToYampa'
     handle <- readIORef handleRef
 
     case msg of
@@ -107,59 +124,85 @@ main = do
           let regPairs = matchAlias (dRegister archComp') reg
               memPairs = matchAlias (dMemory   archComp') mem
 
-          writeChan chanToUi (LoadMemory   memPairs)
-          writeChan chanToUi (LoadRegistry regPairs)
+          writeBChan chanToUi (LoadMemory   memPairs)
+          writeBChan chanToUi (LoadRegistry regPairs)
 
-        writeChan chanToUi (ChangeEvent c archComp')
+        writeBChan chanToUi (ChangeEvent c archComp')
 
       RestartMessage -> do
         writeIORef doneRef True
         react handle (0, Nothing)
         writeIORef doneRef False
 
-        writeChan chanToUi (ReloadEvent source (matchAlias (dRegister arch) reg) (matchAlias (dMemory   arch) mem))
+        writeBChan chanToUi (ReloadEvent source (matchAlias (dRegister arch) reg) (matchAlias (dMemory   arch) mem))
         newHandle <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
         writeIORef handleRef newHandle
 
         archComp' <- readIORef resultRef
-        writeChan chanToUi (ChangeEvent 1 archComp')
+        writeBChan chanToUi (ChangeEvent 1 archComp')
 
-  putStrLn "Startin business"
-  void $ M.customMain (V.mkVty def) chanToUi theApp
-       $ initialState chanToYampa source (matchAlias (dRegister arch) reg)
-       $ matchAlias (dMemory   arch) mem
+  putStrLn "Starting simulation"
+  let cfg = (V.mkVty defaultConfig)
+  void $ M.customMain cfg (Just chanToUi) theApp
+       $ initialState chanToYampa' source (matchAlias (dRegister arch) reg)
+       $ matchAlias (dMemory arch) mem
 
-senseInput :: Bool -> Bool -> IO (DTime, Maybe Bool)
-senseInput debug _
-  | False        = return (0.0, Just debug)
-  | otherwise    = do
-    input <- getLine
-    putStrLn $ "input: " ++ input
-    return (10.0, Just debug)
+main :: IO ()
+main = do
+  args <- getArgs
 
-actuate :: Show a => IORef Bool -> IORef a -> Bool -> a -> IO Bool
-actuate doneRef resultRef _ output = do
-  done <- readIORef doneRef
+  let sourceFiles = filter (not . isPrefixOf "--") args
 
-  writeIORef resultRef output
-  return done
+  when (null sourceFiles) $ do
+    putStrLn "No source file specified."
+    exitFailure
 
-actuateS :: IORef Bool -> Bool -> String -> IO Bool
-actuateS doneRef _ output = do
-  done <- readIORef doneRef
-  putStrLn output
-  return done
+  let sourceFile = head sourceFiles
+  putStrLn $ "source file: " ++ sourceFile
 
-actuateDebug :: Bool -> ArchitectureComp -> IO Bool
-actuateDebug _ archComp = do
-  putStrLn $ dDebug archComp
-  return False
+  when ("--parser-output" `elem` args) $ do
+    source <- readFile sourceFile
 
--- | Returns the number of seconds it took the action to complete.
-benchIOAction :: NFData b => IO b -> IO Double
-benchIOAction a = do
-  start <- getCPUTime
-  r <- a
-  end <- r `deepseq` getCPUTime
+    case parse parseFile sourceFile source of
+      Left err -> print err >> exitFailure
+      Right (rd, md, tokens) -> do
+        putStrLn "Reg data:"
+        mapM_ print rd
 
-  return $ fromIntegral (end - start) / (10^12)
+        putStrLn "\nMemory data:"
+        mapM_ print md
+
+        putStrLn "\nTokens:"
+        mapM_ print tokens
+
+        exitSuccess
+
+  when ("--assembler-output" `elem` args) $ do
+    source <- readFile sourceFile
+
+    case assemble source of
+      Left err -> print err >> exitFailure
+      Right (rd, md, ints) -> do
+        putStrLn "Reg data:"
+        mapM_ print rd
+
+        putStrLn "\nMemory data:"
+        mapM_ print md
+
+        putStrLn "\nInstructions:"
+        mapM_ print ints
+
+        exitSuccess
+
+  let benchmarkCycles = do
+        i      <- elemIndex "--benchmark" args
+        cycles <- args ^? ix (i + 1)
+        let toDigit c
+              | isDigit c  = Just . fromIntegral $ digitToInt c
+              | otherwise = Nothing
+
+        ds <- mapM toDigit cycles
+
+        return (foldl (\acc c -> acc * 10 + c) 0 ds)
+
+  run sourceFile ("--debug" `elem` args) benchmarkCycles

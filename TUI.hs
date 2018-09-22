@@ -6,21 +6,29 @@ module TUI
   , module TUI.Table
   ) where
 
-import Pips.Architecture (ArchitectureComp, dLineNum, dMemory, dRegister, dRegisterChange, dMemoryChange)
+import Pips.Architecture
+  ( ArchitectureComp
+  , dLineNum
+  , dMemory
+  , dRegister
+  , dRegisterChange
+  , dMemoryChange
+  )
 
 import TUI.Table
 
-import Numeric.Lens
-import Control.Lens
+import Lens.Micro
+import Lens.Micro.TH
+
 import Control.Monad.IO.Class(liftIO, MonadIO)
-import Control.Concurrent (Chan, writeChan, readChan)
 
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
 
+import qualified Data.Function as F (on)
+
+import Data.Char (chr, intToDigit, ord, isDigit)
 import Data.Monoid
-import Data.Data.Lens()
-import Data.Vector.Lens()
 import qualified Data.Vector as V
 
 import Data.Text (Text)
@@ -28,6 +36,7 @@ import qualified Data.Text as T (null)
 
 import qualified Graphics.Vty as V
 
+import Brick.BChan
 import qualified Brick.Main as M
 import qualified Brick.Types as T
 import Brick.Markup (markup, (@?))
@@ -53,17 +62,43 @@ import Brick.Widgets.Core
   )
 import Brick.Util (fg, on)
 
+data WidgetId =
+  MemTableId
+  | MemColId Int
+  | RegTableId
+  | RegColId Int
+  | SourceTableId
+  | SourceColId Int
+  | EditorId
+  | EditorColId Int
+  | CycleEditorId
+  deriving (Show, Eq)
+
+widgetIdToInt :: WidgetId -> (Int, Int)
+widgetIdToInt MemTableId      = (0, 0)
+widgetIdToInt RegTableId      = (1, 0)
+widgetIdToInt SourceTableId   = (2, 0)
+widgetIdToInt EditorId        = (3, 0)
+widgetIdToInt CycleEditorId   = (4, 0)
+widgetIdToInt (MemColId n)    = (0, n)
+widgetIdToInt (RegColId n)    = (1, n)
+widgetIdToInt (SourceColId n) = (2, n)
+widgetIdToInt (EditorColId n) = (3, n)
+
+instance Ord WidgetId where
+  compare = compare `F.on` widgetIdToInt
+
 data St =
     St {
-         _memory       :: Table String TableCell
-       , _register     :: Table String TableCell
-       , _source       :: Table String TableCell
+         _memory       :: Table WidgetId String TableCell
+       , _register     :: Table WidgetId String TableCell
+       , _source       :: Table WidgetId String TableCell
        , _widgetFocus  :: Focus
        , _numberFormat :: NumberFormat
        , _clockCycles  :: Int
        , _appMode      :: AppMode
-       , _chanToYampa  :: Chan YampaMessage
-       , _cycleEditor  :: E.Editor
+       , _chanToYampa  :: BChan YampaMessage
+       , _cycleEditor  :: E.Editor String WidgetId
        , _cycleStepSize :: Int
        , _errorMsg     :: Text
        }
@@ -93,7 +128,32 @@ data TableCell = StringCell String | IntCell Int | ValueCell Int deriving (Show,
 
 makeLenses ''St
 
-drawUI :: St -> [Widget]
+base :: Int -> Int -> [Int]
+base n x
+  | x == 0    = [0]
+  | otherwise = go x []
+  where go 0  r = r
+        go x' r = go (x' `quot` n) (x' `mod` n : r)
+
+fmtNumber :: NumberFormat -> Int -> String
+fmtNumber DecimalFormat = show
+fmtNumber HexFormat     = ("0x" ++) . map toHex . base 16
+  where toHex x
+          | 0 <= x && x <= 9   = intToDigit x
+          | 10 <= x && x <= 15 = chr (ord 'a' + x - 10)
+          | otherwise          = 'f'
+fmtNumber BinaryFormat  = ("0b" ++) . map intToDigit . base 2
+
+drawLeftAligned :: String -> Widget n
+drawLeftAligned = padRight T.Max . str
+
+drawCell :: NumberFormat -> RowMode -> TableCell -> Widget WidgetId
+drawCell format Highlighted cell  = withAttr highlightAttr $ drawCell format Normal cell
+drawCell _      _ (StringCell s)  = drawLeftAligned $ "  " ++ s
+drawCell _      _ (IntCell n)     = drawLeftAligned $ "  " ++ show n
+drawCell format _ (ValueCell n)   = drawLeftAligned $ "  " ++ fmtNumber format n
+
+drawUI :: St -> [Widget WidgetId]
 drawUI st = case st ^. appMode of
   NormalMode -> [ui]
   CycleMode  -> [C.center editBox]
@@ -105,7 +165,7 @@ drawUI st = case st ^. appMode of
 
         editBox = B.borderWithLabel (str " Cycles per Step ")  . hLimit 50 $
           C.hCenter errorWidget
-          <=> E.renderEditor editor
+          <=> E.renderEditor False editor
           <=> emptyWidget
 
         highlightFocus True  = withAttr focusAttr
@@ -131,21 +191,7 @@ drawUI st = case st ^. appMode of
                               , C.hCenter $ str "[up/down] Scroll View [tab] Switch View"
                               ]
 
-drawLeftAligned :: String -> Widget
-drawLeftAligned = padRight T.Max . str
-
-formatter :: NumberFormat -> Int -> String
-formatter DecimalFormat = show
-formatter HexFormat     = ("0x" ++) . (^. re hex)
-formatter BinaryFormat  = ("0b" ++) . (^. re binary)
-
-drawCell :: NumberFormat -> RowMode -> TableCell -> Widget
-drawCell format Highlighted cell  = withAttr highlightAttr $ drawCell format Normal cell
-drawCell _      _ (StringCell s)  = drawLeftAligned $ "  " ++ s
-drawCell _      _ (IntCell n)     = drawLeftAligned $ "  " ++ show n
-drawCell format _ (ValueCell n)   = drawLeftAligned $ "  " ++ formatter format n
-
-getFocus :: St -> Lens' St (Table String TableCell)
+getFocus :: St -> Lens' St (Table WidgetId String TableCell)
 getFocus St {_widgetFocus = MemTable} = memory
 getFocus St {_widgetFocus = RegTable} = register
 getFocus St {_widgetFocus = SourceCode} = source
@@ -153,34 +199,11 @@ getFocus St {_widgetFocus = SourceCode} = source
 cycleEnum :: (Enum a, Bounded a, Eq a) => a -> a
 cycleEnum x = if maxBound == x then minBound else succ x
 
-appEvent :: St -> AppEvent -> T.EventM (T.Next St)
-appEvent st@(St {_appMode = CycleMode}) (VtyEvent ev) = cycleInputEvent st ev
+sendYampaMsg :: MonadIO m => St -> YampaMessage -> m ()
+sendYampaMsg st = liftIO . writeBChan (st ^. chanToYampa)
 
-appEvent st (LoadMemory mem) = do
-  let (names, vals) = unzip mem
-  M.continue $ st & memory . tableCellT 1 .~ map StringCell names
-                  & memory . tableCellT 2 .~ map ValueCell vals
-
-appEvent st (LoadRegistry reg) = do
-  let (names, vals) = unzip reg
-  M.continue $ st & register . tableCellT 1 .~ map StringCell names
-                  & register . tableCellT 2 .~ map ValueCell vals
-
-appEvent st (ReloadEvent src reg mem) = M.continue $ initialState (st ^. chanToYampa) src reg mem
-
-appEvent st (ChangeEvent cycles archComp) =
-  let updateData _   Nothing  = id
-      updateData dat (Just r) = (& tableCellT 2 . ix r .~ ValueCell (S.index dat r)) . flip tableSetHighlight [r]
-  in  M.continue $ st & clockCycles +~ cycles
-                      & memory   %~ updateData  (dMemory archComp)   (dMemoryChange archComp)
-                      & source   %~ tableMoveTo (dLineNum archComp)
-                      & register %~ updateData  (dRegister archComp) (dRegisterChange archComp)
-
-appEvent st (VtyEvent e) = vtyEvent st e
--- appEvent st _            = M.continue st
-
-vtyEvent :: St -> V.Event -> T.EventM (T.Next St)
-vtyEvent st e =
+handleVtyEvent :: St -> V.Event -> T.EventM WidgetId (T.Next St)
+handleVtyEvent st e =
     case e of
         V.EvKey (V.KChar 'q') [] -> sendYampaMsg st QuitMessage >> M.halt st
         V.EvKey V.KEsc [] -> M.halt st
@@ -196,52 +219,69 @@ vtyEvent st e =
           sendYampaMsg st RestartMessage
           M.continue newSt
 
-        ev -> traverseOf (getFocus st) (T.handleEvent ev) st >>= M.continue
+        ev -> traverseOf (getFocus st) (handleTableEvent ev) st >>= M.continue
 
-cycleInputEvent :: St -> V.Event -> T.EventM (T.Next St)
-cycleInputEvent st (V.EvKey V.KEsc []) = M.continue (st & appMode .~ NormalMode)
-cycleInputEvent st (V.EvKey V.KEnter []) = do
+cycleModeHandleVtyEvent :: St -> V.Event -> T.EventM WidgetId (T.Next St)
+cycleModeHandleVtyEvent st (V.EvKey V.KEsc []) = M.continue (st & appMode .~ NormalMode)
+cycleModeHandleVtyEvent st (V.EvKey V.KEnter []) = do
   let editorText = unwords . E.getEditContents $ st ^. cycleEditor
-  case editorText ^? decimal of
-    Nothing       -> M.continue $ st & errorMsg .~ "Step size must be a number"
-    Just x
-      | x < 0     -> M.continue $ st & errorMsg      .~ "Step size must be a positive number"
-
-      | otherwise -> M.continue $ st & cycleStepSize .~ x
+  case all isDigit editorText of
+    False         -> M.continue $ st & errorMsg .~ "Step size must be a number"
+    True
+      | n < 0     -> M.continue $ st & errorMsg      .~ "Step size must be a positive number"
+      | otherwise -> M.continue $ st & cycleStepSize .~ n
                                      & appMode       .~ NormalMode
                                      & errorMsg      .~ ""
+      where n = read editorText
 
-cycleInputEvent st ev = M.continue =<< T.handleEventLensed st cycleEditor ev
+cycleModeHandleVtyEvent st ev = M.continue =<< T.handleEventLensed st cycleEditor E.handleEditorEvent ev
 
-sendYampaMsg :: MonadIO m => St -> YampaMessage -> m ()
-sendYampaMsg st = liftIO . writeChan (st ^. chanToYampa)
+handleEvent :: St -> T.BrickEvent WidgetId AppEvent -> T.EventM WidgetId (T.Next St)
+handleEvent st@(St {_appMode = CycleMode}) (T.VtyEvent ev) = cycleModeHandleVtyEvent st ev
 
-listDrawElement :: (Show a) => Bool -> a -> Widget
-listDrawElement sel a =
-    let selStr s = if sel
-                   then withAttr customAttr (str $ "<" <> s <> ">")
-                   else str s
-    in C.hCenter $ str "Item " <+> selStr (show a)
+handleEvent st (T.AppEvent (LoadMemory mem)) = do
+  let (names, vals) = unzip mem
+  M.continue $ st & memory . tableCellT 1 .~ map StringCell names
+                  & memory . tableCellT 2 .~ map ValueCell vals
 
-initialState :: Chan YampaMessage -> String -> [(String, Int)] -> [(String, Int)] -> St
+handleEvent st (T.AppEvent (LoadRegistry reg)) = do
+  let (names, vals) = unzip reg
+  M.continue $ st & register . tableCellT 1 .~ map StringCell names
+                  & register . tableCellT 2 .~ map ValueCell vals
+
+handleEvent st (T.AppEvent (ReloadEvent src reg mem)) = M.continue $ initialState (st ^. chanToYampa) src reg mem
+
+handleEvent st (T.AppEvent (ChangeEvent cycles archComp)) =
+  let updateData _   Nothing  = id
+      updateData dat (Just r) = (& tableCellT 2 . ix r .~ ValueCell (S.index dat r)) . flip tableSetHighlight [r]
+
+  in  M.continue $ st & clockCycles %~ (+ cycles)
+                      & memory   %~ updateData  (dMemory archComp)   (dMemoryChange archComp)
+                      & source   %~ tableMoveTo (dLineNum archComp)
+                      & register %~ updateData  (dRegister archComp) (dRegisterChange archComp)
+
+handleEvent st (T.VtyEvent e) = handleVtyEvent st e
+handleEvent st _              = M.continue st
+
+initialState :: BChan YampaMessage -> String -> [(String, Int)] -> [(String, Int)] -> St
 initialState chan src reg mem =
   let src' = lines src
-      regTable = makeTable (T.Name "registerTable") 1 [
+      regTable = makeTable RegTableId RegColId 1 [
                 ("#"    , 6,  V.fromList . map IntCell    $ take (length reg) [0..]),
                 ("Alias", 10, V.fromList . map StringCell $ map fst reg),
                 ("Value", 40, V.fromList . map ValueCell  $ map snd reg)
                ]
-      memTable = makeTable (T.Name "memoryTable") 1 [
+      memTable = makeTable MemTableId MemColId 1 [
                 ("#"    , 6,  V.fromList . map IntCell    $ take (length mem) [0..]),
                 ("Alias", 10, V.fromList . map StringCell $ map fst mem),
                 ("Value", 40, V.fromList . map ValueCell  $ map snd mem)
                ]
-      sourceTable = makeTable (T.Name "sourceTable") 1 [
+      sourceTable = makeTable SourceTableId SourceColId 1 [
                 ("#"    , 6,  V.fromList . map IntCell    $ take (length src') [1..]),
                 (" ", 10000,  V.fromList . map StringCell $ src')
                ]
 
-      editor = E.editor "cycleEditor" (str . unlines) (Just 1) "1"
+      editor = E.editor CycleEditorId (str . unlines) (Just 1) "1"
   in St {
     _memory = memTable
     , _register = regTable
@@ -278,12 +318,11 @@ theMap = A.attrMap V.defAttr
     , (focusAttr            , V.white  `on` V.blue)
     ]
 
-theApp :: M.App St AppEvent
+theApp :: M.App St AppEvent WidgetId
 theApp =
     M.App { M.appDraw = drawUI
           , M.appChooseCursor = M.showFirstCursor
-          , M.appHandleEvent = appEvent
+          , M.appHandleEvent = handleEvent
           , M.appStartEvent = return
           , M.appAttrMap = const theMap
-          , M.appLiftVtyEvent = VtyEvent
           }
