@@ -5,17 +5,13 @@ module Pips.Assembler
 
 import qualified Data.Map.Lazy as M
 
+import Data.List (findIndex)
+import Data.Maybe (fromMaybe)
+
 import Text.Parsec (parse)
 
 import Pips.Parser
 import Pips.Instruction
-
-insertSortedOnFst :: (Ord a) => [(a, b)] -> (a, b) -> [(a, b)]
-insertSortedOnFst is (a, b) = left ++ (a, b) : right
-  where (left, right) = span ((< a) . fst) is
-
-intervalSearch :: (Ord a) => [(a, b)] -> a -> b
-intervalSearch ins x = head [b | (a, b) <- ins, x <= a]
 
 removeRegAlias :: M.Map String Int -> RegName -> RegName
 removeRegAlias _ r@(RegNum _) = r
@@ -31,11 +27,11 @@ removeMemAlias entries (MemAddrAlias name) =
     Just a -> MemAddrNum a
     _      -> error ("Memory Address " ++ name ++ " not defined.")
 
-removeLabelAlias :: [(Int, Int)] -> M.Map String Int -> Label -> Label
-removeLabelAlias _ _ l@(LabelNum _) = l
-removeLabelAlias ivs entries (LabelName name) =
+removeLabelAlias :: Int -> [Int] -> M.Map String Int -> Label -> Label
+removeLabelAlias _ _ _ l@(LabelNum _) = l
+removeLabelAlias len lineNums entries (LabelName name) =
   case M.lookup name entries of
-    Just l -> LabelNum (intervalSearch ivs l)
+    Just l -> LabelNum (fromMaybe len (findIndex (l <) lineNums))
     _      -> error ("Label " ++ name ++ " not defined.")
 
 isInstruction :: Token -> Bool
@@ -55,8 +51,8 @@ removeAliases regData memData tokens = map f ins
         rma = removeMemAlias (M.fromList [(name, a) | DataEntry a (Just name) _ <- memData])
 
         lines' = map tokenLineNum ins
-        ivs = foldl insertSortedOnFst [(maxBound, length ins - 1)] (zip lines' [0..])
-        rla = removeLabelAlias ivs (M.fromList [(name, l) | LabelToken l name <- labels])
+        len = length lines'
+        rla = removeLabelAlias len lines' (M.fromList [(name, l) | LabelToken l name <- labels])
 
         f (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)
         f (Reg3Token l name r1 r2 r3)      = Reg3Token   l name (rra r1) (rra r2) (rra r3)
