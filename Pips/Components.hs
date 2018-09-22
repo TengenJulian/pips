@@ -29,6 +29,7 @@ clock = loopPre Falling $ proc (_, state) ->
 alu :: SF (AluOp, Int, Int) (Int, Bool)
 alu = proc (aluOp', left', right') -> do
   let result = case aluOp' of
+        MulOp -> left' * right'
         AddOp -> left' + right'
         SubOp -> left' - right'
         AndOp -> left' .&. right'
@@ -88,7 +89,7 @@ control = proc (c, inst) -> do
         | otherwise          = Rd
 
       regWriteData'
-        | instType inst == I && opCode inst `elem` [LwOpc] = MemData
+        | instType inst == I && opCode inst == LwOpc = MemData
         | otherwise = AluOut
 
   returnA -< Control aluSrc' branchAct' memAct' regAct' regWriteSrc' regWriteData'
@@ -123,7 +124,11 @@ regMem mem = proc (cont, rs', rt', rd', writeData) -> do
 
   deltaReg' <- delay 10 Nothing -<  if doWrite then Just rDst else Nothing
 
-  returnA -< RegComp mem' (safeGet mem' 0 rs') (safeGet mem' 0 rt') deltaReg'
+  let (ra, rb)
+        | aluSrc cont == Shamt = (rt', rs')
+        | otherwise            = (rs' ,rt')
+
+  returnA -< RegComp mem' (safeGet mem' 0 ra) (safeGet mem' 0 rb) deltaReg'
 
 data MemComp = MemComp {
     memData :: Seq Int
@@ -178,7 +183,6 @@ aluControl = proc (opCode', aluOp') -> do
         | otherwise          = SllOp
   returnA -< result
 
-
 counter :: SF () Int
 counter = proc _ -> do
   rec x <- delay 10 0 -< x + 1
@@ -199,6 +203,3 @@ testMem mem = loopPre (mem, 0) $ proc ((c, i),(mem', output)) -> do
 testCircuit :: Eq a => [a] -> SF a b -> [b]
 testCircuit xs sf = embed sf steps
   where steps = deltaEncode 10 xs
-
-xs = [(Rising, 1::Int),(Falling, 2)]
-ys = [(Rising, 2::Int),(Falling, 0)]

@@ -10,6 +10,13 @@ import Text.Parsec (parse)
 import Pips.Parser
 import Pips.Instruction
 
+insertSortedOnFst :: (Ord a) => [(a, b)] -> (a, b) -> [(a, b)]
+insertSortedOnFst is (a, b) = left ++ (a, b) : right
+  where (left, right) = span ((< a) . fst) is
+
+intervalSearch :: (Ord a) => [(a, b)] -> a -> b
+intervalSearch ins x = head [b | (a, b) <- ins, x <= a]
+
 removeRegAlias :: M.Map String Int -> RegName -> RegName
 removeRegAlias _ r@(RegNum _) = r
 removeRegAlias entries (RegAlias name) =
@@ -24,13 +31,6 @@ removeMemAlias entries (MemAddrAlias name) =
     Just a -> MemAddrNum a
     _      -> error ("Memory Address " ++ name ++ " not defined.")
 
-intervalInsert :: (Ord a) => [(a, b)] -> (a, b) -> [(a, b)]
-intervalInsert is (a, b) = left ++ (a, b) : right
-  where (left, right) = span ((< a) . fst) is
-
-intervalSearch :: (Ord a) => [(a, b)] -> a -> b
-intervalSearch ins x = head [b | (a, b) <- ins, x <= a]
-
 removeLabelAlias :: [(Int, Int)] -> M.Map String Int -> Label -> Label
 removeLabelAlias _ _ l@(LabelNum _) = l
 removeLabelAlias ivs entries (LabelName name) =
@@ -39,7 +39,6 @@ removeLabelAlias ivs entries (LabelName name) =
     _      -> error ("Label " ++ name ++ " not defined.")
 
 isInstruction :: Token -> Bool
-
 isInstruction ins = case ins of
   CommentToken _ _ -> False
   LabelToken _ _   -> False
@@ -47,8 +46,8 @@ isInstruction ins = case ins of
 
 -- | This function removes memory/register aliases and converts jump targets in source lines,
 -- to jump target in PC offset.
-preprocessToken :: [DataEntry] -> [DataEntry] -> [Token] -> [Token]
-preprocessToken regData memData tokens = map m ins
+removeAliases :: [DataEntry] -> [DataEntry] -> [Token] -> [Token]
+removeAliases regData memData tokens = map f ins
   where labels = [l | l@(LabelToken _ _) <- tokens]
         ins = filter isInstruction tokens
 
@@ -56,20 +55,20 @@ preprocessToken regData memData tokens = map m ins
         rma = removeMemAlias (M.fromList [(name, a) | DataEntry a (Just name) _ <- memData])
 
         lines' = map tokenLineNum ins
-        ivs = foldl intervalInsert [(maxBound, length ins - 1)] (zip lines' [0..])
+        ivs = foldl insertSortedOnFst [(maxBound, length ins - 1)] (zip lines' [0..])
         rla = removeLabelAlias ivs (M.fromList [(name, l) | LabelToken l name <- labels])
 
-        m (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)
-        m (Reg3Token l name r1 r2 r3)      = Reg3Token   l name (rra r1) (rra r2) (rra r3)
-        m (MemOpToken l name r1 m1 r2)     = MemOpToken  l name (rra r1) (rma m1) (rra r2)
-        m (Reg2iToken l name r1 r2 v)      = Reg2iToken  l name (rra r1) (rra r2) v
+        f (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)
+        f (Reg3Token l name r1 r2 r3)      = Reg3Token   l name (rra r1) (rra r2) (rra r3)
+        f (MemOpToken l name r1 m1 r2)     = MemOpToken  l name (rra r1) (rma m1) (rra r2)
+        f (Reg2iToken l name r1 r2 v)      = Reg2iToken  l name (rra r1) (rra r2) v
 
-        m (LuiToken l r1 v) = LuiToken l (rra r1) v
+        f (LuiToken l r1 v) = LuiToken l (rra r1) v
 
-        m (JrToken l r1)   = JrToken l (rra r1)
-        m (JToken l label) = JToken  l (rla label)
+        f (JrToken l r1)   = JrToken l (rra r1)
+        f (JToken l label) = JToken  l (rla label)
 
-        m token
+        f token
           | isInstruction token = error ("preprocess Token not implemented for " ++ show token)
           | otherwise           = token
 
@@ -89,11 +88,13 @@ memOpAssemble (MemOpToken l _ (RegNum r1) (MemAddrNum m1) (RegNum r2)) =
 memOpAssemble _ = error "Applying memOpAssemble to a non MemOpToken"
 
 assembleToken :: Token -> Instruction
+assembleToken t@(Reg3Token _ MulN _ _ _) = (reg3Assemble t) {aluOp = MulOp}
 assembleToken t@(Reg3Token _ AddN _ _ _) = (reg3Assemble t) {aluOp = AddOp}
 assembleToken t@(Reg3Token _ SubN _ _ _) = (reg3Assemble t) {aluOp = SubOp}
 assembleToken t@(Reg3Token _ AndN _ _ _) = (reg3Assemble t) {aluOp = AndOp}
 assembleToken t@(Reg3Token _ XorN _ _ _) = (reg3Assemble t) {aluOp = XorOp}
 assembleToken t@(Reg3Token _  OrN _ _ _) = (reg3Assemble t) {aluOp = OrOp}
+assembleToken t@(Reg3Token _ SltN _ _ _) = (reg3Assemble t) {aluOp = SltOp}
 
 assembleToken t@(BranchToken _ BeqN _ _ _) = (branchAssemble t) {opCode = BeqOpc}
 assembleToken t@(BranchToken _ BneN _ _ _) = (branchAssemble t) {opCode = BneOpc}
@@ -126,6 +127,6 @@ showLeft (Left err)  = Left (show err)
 assemble :: String -> Either String ([DataEntry], [DataEntry], [Instruction])
 assemble source = do
   (regData, memData, tokens) <- showLeft $ parse parseFile "" source
-  let ints = map assembleToken (preprocessToken regData memData tokens)
+  let ints = map assembleToken (removeAliases regData memData tokens)
 
   return (regData, memData, ints)

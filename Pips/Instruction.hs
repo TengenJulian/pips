@@ -45,9 +45,10 @@ nop = Instruction ROpc R 0 0 0 0 0 SllOp "" 0 0
 
 data InstructionType = R | I | J deriving (Show, Eq)
 
-data AluOp = AddOp | SubOp | AndOp | OrOp | SllOp | SrlOp | SltOp | JrOp | XorOp | LuiOp deriving (Show, Eq)
+data AluOp = AddOp | SubOp | MulOp | AndOp | OrOp | SllOp | SrlOp | SltOp | JrOp | XorOp | LuiOp deriving (Show, Eq)
 
 instance Enum AluOp where
+  toEnum 0x18 = MulOp
   toEnum 0x20 = AddOp
   toEnum 0x22 = SubOp
   toEnum 0x24 = AndOp
@@ -62,6 +63,7 @@ instance Enum AluOp where
   toEnum 0x50 = LuiOp
   toEnum _    = SllOp
 
+  fromEnum MulOp = 0x18
   fromEnum AddOp = 0x20
   fromEnum SubOp = 0x22
   fromEnum AndOp = 0x24

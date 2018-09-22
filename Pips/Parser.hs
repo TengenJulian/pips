@@ -22,6 +22,7 @@ data InstructionName =
   | SltN
   | SllN
   | SrlN
+  | MulN
   | AddiN
   | LuiN
   | JrN
@@ -141,7 +142,7 @@ binary :: Parser Int
 binary = do
   try (string "0b")
   s <- many1 (char '0' <|> char '1')
-  return $ sum [(read [d]) * 2 ^ e| (d, e) <- zip (reverse s) [0..]]
+  return $ sum [(read [d]) * 2 ^ e | (d, e) <- zip (reverse s) [0..]]
 
 natural, integer :: Parser Integer
 natural = Tok.natural lexer
@@ -233,6 +234,7 @@ parseToken :: Parser Token
 parseToken = regs3 AddN "add"
   <|> regs3 SubN "sub"
   <|> regs3 AndN "and"
+  <|> regs3 MulN "mult"
   <|> regs3 XorN "xor"
   <|> regs3 SltN "slt"
   <|> regs3  OrN "or"
