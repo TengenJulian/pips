@@ -56,7 +56,6 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       writeBack <- writebackMutex -< (cont, result, memOutput memComp)
 
       newPc    <- delay 10 0 <<< pcMutex -< (cont, zero, address inst, pc + 1, address inst, regA regComp)
-
     let debugMsg = unlines [
             "Clock: " ++ show c
             , show inst
@@ -69,12 +68,14 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
             , "new program counter: " ++ show newPc
             ]
 
+    let ln = min (S.length insts - 1) newPc
+
     returnA -< ArchitectureComp {
       dMemory           = memData memComp
       , dMemoryChange   = deltaMem memComp
       , dRegister       = regData regComp
       , dRegisterChange = deltaReg regComp
       , dInstructions   = insts
-      , dLineNum        = lineNum (S.index insts newPc)
+      , dLineNum        = lineNum (S.index insts ln)
       , dDebug          = if debug then debugMsg else ""
       }
