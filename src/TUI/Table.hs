@@ -15,6 +15,7 @@ import Data.List (intersperse)
 import qualified Data.Vector as V
 -- import Data.Vector.Lens
 
+import Brick.Widgets.Core (withDefAttr)
 import Brick.Types
 import Brick.Widgets.List
 import Brick.Widgets.Border
@@ -32,6 +33,7 @@ data Table n h e = Table  {
   _tableName :: n
   , _rowWithHighlights :: [Int]
   , _tableLength :: Int
+  , _tableSelHighlightDisabled :: Bool
   , _tableLists :: [(h, Int, List n (RowMode, e))]
   }
 
@@ -42,7 +44,7 @@ imap f = zipWith f [0..]
 
 makeTable :: forall n h e. n -> (Int -> n) -> Int -> [(h, Int, V.Vector e)] -> Table n h e
 -- makeTable name size = Table name [] . imap convertTriple
-makeTable name listName size = Table name [] size . imap convertTriple
+makeTable name listName size = Table name [] size False . imap convertTriple
   where convertTriple :: Int -> (h, Int, V.Vector e) -> (h, Int, List n (RowMode, e))
         convertTriple i = (& _3 %~ toListWidget i)
 
@@ -64,21 +66,27 @@ renderTable :: (Show n, Ord n) => Table n h e -> (h -> Widget n) -> (RowMode -> 
 renderTable table renderHeader renderElem =
   let lists = table' ^. tableLists
       writeHighlights table' i = table' & tableLists . each . _3
-                                      . listElementsL . vix i . _1 .~ Highlighted
+                                        . listElementsL . vix i . _1 .~ Highlighted
 
       table' = foldl writeHighlights table (table ^. rowWithHighlights)
+      re _ (mode, elem')
+        | table ^. tableSelHighlightDisabled = withDefAttr listAttr $ renderElem mode elem'
+        | otherwise                          = renderElem mode elem'
+
       renderColumn _ (h, width, ls) = hLimit width $
                                       renderHeader h
                                       <=> hBorder
-                                      <=> renderList (\_ (mode, elem) -> renderElem mode elem) True ls
+                                      <=> renderList re True ls
 
   in foldl (<+>) emptyWidget . intersperse vBorder . imap renderColumn $ lists
 
 transformTableCell :: Table n a e ->  Int -> Int -> (e -> e) -> Table n a e
 transformTableCell table r c f = table & tableLists . ix c %~ (& _3 . listElementsL . vix r . _2 %~ f)
 
-tableMoveTo :: Int -> Table n a e -> Table n a e
-tableMoveTo s t = t & tableLists %~ map (& _3 %~ listMoveTo s)
+tableMoveTo :: Maybe Int -> Table n a e -> Table n a e
+tableMoveTo Nothing  t = t & tableSelHighlightDisabled .~ True
+tableMoveTo (Just r) t = t & tableSelHighlightDisabled .~ False
+                           & tableLists %~ map (& _3 %~ listMoveTo r)
 
 partsOf :: Lens' a b -> Lens' [a] [b]
 partsOf l = lens (^.. each . l) setter

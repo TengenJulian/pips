@@ -19,7 +19,7 @@ data ArchitectureComp = ArchitectureComp {
   , dInstructions :: Seq Instruction
   , dMemoryChange :: Maybe Int
   , dRegisterChange :: Maybe Int
-  , dLineNum :: Int
+  , dLineNum :: Maybe Int
   , dDebug :: String
   } deriving (Show, Eq)
 
@@ -30,7 +30,7 @@ init16x16 reg mem inst = ArchitectureComp {
   , dInstructions   = S.fromList inst
   , dMemoryChange   = Nothing
   , dRegisterChange = Nothing
-  , dLineNum = 0
+  , dLineNum = Nothing
   , dDebug = ""
   }
   where emptyData = S.fromList $ replicate 16 0
@@ -40,11 +40,14 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
   let register = regMem reg
       im = instMem insts
       memory = mainMem mem
+
   in proc debug -> do
     c <- clock -< Rising
     rec
       (pc, inst) <- im -< newPc
       cont     <- control -< (c, inst)
+
+      let done = S.null insts || pc >= S.length insts
 
       regComp  <- register    -< (cont, rs inst, rt inst, rd inst, writeBack)
 
@@ -55,7 +58,15 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       memComp <- memory -< (cont, result, regB regComp)
       writeBack <- writebackMutex -< (cont, result, memOutput memComp)
 
-      newPc    <- delay 10 0 <<< pcMutex -< (cont, zero, address inst, pc + 1, address inst, regA regComp)
+      let nextPc = if done then pc else pc + 1
+
+      newPc    <- delay 10 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
+      prevDone <- delay 20 (S.null insts) -< returnA done
+
+    let ln | prevDone     = Nothing
+           | otherwise    = Just $ lineNum $ S.index insts i
+           where i = min (S.length insts - 1) pc
+
     let debugMsg = unlines [
             "Clock: " ++ show c
             , show inst
@@ -66,9 +77,9 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
             , "writeBack: " ++ show writeBack
             , "program counter: " ++ show pc
             , "new program counter: " ++ show newPc
+            , "done: " ++ show done
+            , "ln: " ++ show ln
             ]
-
-    let ln = min (S.length insts - 1) newPc
 
     returnA -< ArchitectureComp {
       dMemory           = memData memComp
@@ -76,6 +87,6 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       , dRegister       = regData regComp
       , dRegisterChange = deltaReg regComp
       , dInstructions   = insts
-      , dLineNum        = lineNum (S.index insts ln)
+      , dLineNum        = ln
       , dDebug          = if debug then debugMsg else ""
       }
