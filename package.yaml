@@ -44,5 +44,7 @@ executables:
     ghc-options:
     - -threaded
     - -rtsopts
+    - -Wall
+    - -fwarn-unused-do-bind
     dependencies:
     - pips

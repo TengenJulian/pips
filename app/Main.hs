@@ -1,32 +1,29 @@
-import FRP.Yampa hiding (switch)
+module Main where
 
-import Data.Char (digitToInt, isDigit)
-import Data.IORef
-import Data.List
-import qualified Data.Map.Strict as M
-import Data.Either
-import Data.Foldable (toList)
-import Data.Semigroup ((<>))
-
-import Lens.Micro
-
-import Control.Monad
-import Control.DeepSeq
-import Control.Concurrent (forkIO)
-
-import Options.Applicative
-
-import Text.Parsec (parse)
-
-import Brick.BChan
+import           Brick.BChan
 import qualified Brick.Main as M
-import qualified Graphics.Vty as V
-import Graphics.Vty.Config (defaultConfig)
 
-import System.Directory
-import System.Exit
-import System.CPUTime
-import System.Environment
+import           Control.Concurrent (forkIO)
+import           Control.DeepSeq
+import           Control.Monad
+
+import           Data.Foldable (toList)
+import           Data.IORef
+import qualified Data.Map.Strict as M
+import           Data.Semigroup ((<>))
+
+import           FRP.Yampa hiding (switch)
+
+import qualified Graphics.Vty as V
+import           Graphics.Vty.Config (defaultConfig)
+
+import           Options.Applicative
+
+import           System.Directory
+import           System.CPUTime
+import           System.Exit
+
+import           Text.Parsec (parse)
 
 import Pips.Parser (parseFile)
 import Pips.Assembler
@@ -61,12 +58,14 @@ benchIOAction a = do
   r     <- a
   end   <- r `deepseq` getCPUTime
 
-  return $ fromIntegral (end - start) / (10^12)
+  return $ fromIntegral (end - start) / (10^(12 :: Int))
 
+runDebug :: SF Bool ArchitectureComp -> IO ()
 runDebug archSF = do
     reactimate (return True) (senseInput True) actuateDebug archSF
     exitSuccess
 
+runWithoutTui :: ArchitectureComp -> SF Bool ArchitectureComp -> Int -> IO ()
 runWithoutTui arch archSF numCycles = do
   doneRef   <- newIORef False
   resultRef <- newIORef arch
@@ -81,8 +80,8 @@ runWithoutTui arch archSF numCycles = do
   exitSuccess
 
 run :: String -> IO ()
-run source = do
-  Assembled reg mem insts endLabelMap <- runEither $ assemble source
+run source' = do
+  Assembled reg mem insts endLabelMap <- runEither $ assemble source'
 
   let arch = init16x16 reg mem insts
       archSF = architecture arch endLabelMap
@@ -134,7 +133,7 @@ run source = do
         react handle (0, Nothing)
         writeIORef doneRef False
 
-        writeBChan chanToUi (ReloadEvent source (matchAliasReg $ dRegister arch) (matchAliasMem $ dMemory arch))
+        writeBChan chanToUi (ReloadEvent source' (matchAliasReg $ dRegister arch) (matchAliasMem $ dMemory arch))
         newHandle <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
         writeIORef handleRef newHandle
 
@@ -145,10 +144,9 @@ run source = do
 
   let cfg = V.mkVty defaultConfig
   void $ M.customMain cfg (Just chanToUi) theApp
-       $ initialState chanToYampa' source
+       $ initialState chanToYampa' source'
            (matchAliasReg $ dRegister arch)
            (matchAliasMem $ dMemory arch)
-
 
 data ProgMode =
   ProgSim
@@ -219,14 +217,14 @@ main = do
   putStrLn $ "source file: " ++ sourceFile
 
   s <- readFile sourceFile
-  let source = s ++ "\n"
+  let source' = s ++ "\n"
 
   case argsProgMod args of
     ProgSim ->
-      run source
+      run source'
 
     ProgParserOutput -> do
-      (rd, md, tokens ) <- runEitherShow $ parse parseFile sourceFile source
+      (rd, md, tokens ) <- runEitherShow $ parse parseFile sourceFile source'
       putStrLn "Reg data:"
       mapM_ print rd
 
@@ -239,7 +237,7 @@ main = do
       exitSuccess
 
     ProgAssemblerOutput -> do
-        Assembled rd md ints _ <- runEither $ assemble source
+        Assembled rd md ints _ <- runEither $ assemble source'
         putStrLn "Reg data:"
         mapM_ print rd
 
@@ -252,7 +250,7 @@ main = do
         exitSuccess
 
     mode -> do
-      Assembled reg mem insts endLabelMap <- runEither $ assemble source
+      Assembled reg mem insts endLabelMap <- runEither $ assemble source'
       let arch = init16x16 reg mem insts
           archSF = architecture arch endLabelMap
 

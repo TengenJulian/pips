@@ -6,61 +6,40 @@ module TUI
   , module TUI.Table
   ) where
 
-import Pips.Architecture
-  ( ArchitectureComp
-  , dLineNum
-  , dMemory
-  , dRegister
-  , dRegisterChange
-  , dMemoryChange
-  )
+import qualified Brick.AttrMap as A
+import           Brick.BChan
+import qualified Brick.Main as M
+import           Brick.Markup ( markup, (@?) )
+import           Brick.Types ( Widget )
+import qualified Brick.Types as T
+import           Brick.Util (fg, on)
+import qualified Brick.Widgets.Border as B
+import qualified Brick.Widgets.Center as C
+import           Brick.Widgets.Core ( (<=>), str, vBox, hBox, hLimit,
+                                      withAttr, padRight, emptyWidget )
+import qualified Brick.Widgets.Edit as E
+import qualified Brick.Widgets.List as L
 
-import TUI.Table
+import           Control.Monad.IO.Class ( liftIO, MonadIO )
 
-import Lens.Micro
-import Lens.Micro.TH
-
-import Control.Monad.IO.Class(liftIO, MonadIO)
-
-import Data.Sequence (Seq)
+import           Data.Char ( chr, intToDigit, ord, isDigit )
+import qualified Data.Function as F ( on )
+import           Data.Monoid
+import           Data.Sequence ()
 import qualified Data.Sequence as S
-
-import qualified Data.Function as F (on)
-
-import Data.Char (chr, intToDigit, ord, isDigit)
-import Data.Monoid
+import           Data.Text ( Text )
+import qualified Data.Text as T ( null )
 import qualified Data.Vector as V
-
-import Data.Text (Text)
-import qualified Data.Text as T (null)
 
 import qualified Graphics.Vty as V
 
-import Brick.BChan
-import qualified Brick.Main as M
-import qualified Brick.Types as T
-import Brick.Markup (markup, (@?))
-import qualified Brick.AttrMap as A
-import qualified Brick.Widgets.List as L
-import qualified Brick.Widgets.Edit as E
-import qualified Brick.Widgets.Border as B
-import qualified Brick.Widgets.Center as C
+import           Lens.Micro
+import           Lens.Micro.TH
 
-import Brick.Types
-  ( Widget
-  )
-import Brick.Widgets.Core
-  ( (<+>)
-  , (<=>)
-  , str
-  , vBox
-  , hBox
-  , hLimit
-  , withAttr
-  , padRight
-  , emptyWidget
-  )
-import Brick.Util (fg, on)
+import Pips.Architecture ( ArchitectureComp, dLineNum, dMemory, dRegister,
+                           dRegisterChange, dMemoryChange )
+
+import TUI.Table
 
 data WidgetId =
   MemTableId
@@ -237,7 +216,7 @@ cycleModeHandleVtyEvent st (V.EvKey V.KEnter []) = do
 cycleModeHandleVtyEvent st ev = M.continue =<< T.handleEventLensed st cycleEditor E.handleEditorEvent ev
 
 handleEvent :: St -> T.BrickEvent WidgetId AppEvent -> T.EventM WidgetId (T.Next St)
-handleEvent st@(St {_appMode = CycleMode}) (T.VtyEvent ev) = cycleModeHandleVtyEvent st ev
+handleEvent st@St {_appMode = CycleMode} (T.VtyEvent ev) = cycleModeHandleVtyEvent st ev
 
 handleEvent st (T.AppEvent (LoadMemory mem)) = do
   let (names, vals) = unzip mem

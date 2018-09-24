@@ -5,11 +5,11 @@ module Pips.Assembler
 
 import qualified Data.Map.Lazy as M
 
-import Data.List (findIndex)
-import Data.Maybe (fromMaybe)
+import           Data.List (findIndex)
+import           Data.Maybe (fromMaybe)
 import qualified Data.Vector as V
 
-import Text.Parsec (parse)
+import           Text.Parsec (parse)
 
 import Pips.Parser
 import Pips.Instruction
@@ -63,13 +63,13 @@ removeAliases regData memData tokens = (endLabelMapping, map f ins)
         len = length lines'
 
         lastInLineNum | null ins = 0
-                      | otherwise = tokenLineNum $ last $ ins
+                      | otherwise = tokenLineNum $ last ins
 
         endLabels = [lt | lt@(LabelToken l name) <- labels, l > lastInLineNum]
         endLabelMapping = V.fromList [l | LabelToken l name <- endLabels]
 
         rla = removeLabelAlias len lines'
-          (M.fromList $ [(name, len + i) | (i, (LabelToken l name)) <- zip [0..] endLabels])
+          (M.fromList [(name, len + i) | (i, LabelToken l name) <- zip [0..] endLabels])
           (M.fromList [(name, l) | LabelToken l name <- labels, l < lastInLineNum])
 
         f (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)

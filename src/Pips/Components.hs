@@ -3,15 +3,13 @@ module Pips.Components
   ( module Pips.Components
   ) where
 
-import FRP.Yampa
-import Data.Bits
-
-import Data.Maybe (fromMaybe)
-
-import Data.Sequence (Seq)
+import           Data.Bits
+import           Data.Maybe (fromMaybe)
+import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 
+import           FRP.Yampa
 
 import Pips.Instruction
 import Pips.Assembler
@@ -25,6 +23,10 @@ flipClock Falling = Rising
 delayHalfClock :: a -> SF a a
 delayHalfClock = delay 10
 
+-- TODO: This clock might be broken, as it has no time delay.
+-- This might be the reason, why 2 reacts separate are needed
+-- for a full clock cycle, where each react update the state
+-- of the clock.
 clock :: SF Clock Clock
 clock = loopPre Falling $ proc (_, state) ->
   returnA -< (flipClock state, flipClock state)

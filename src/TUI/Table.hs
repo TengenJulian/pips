@@ -7,13 +7,13 @@ module TUI.Table
   ( module TUI.Table
   ) where
 
-import Lens.Micro
-import Lens.Micro.TH
+import Brick.Types
+import Brick.Widgets.List
+import Brick.Widgets.Border
+import Brick.Widgets.Core ( (<+>) , (<=>) , hLimit , emptyWidget, withDefAttr )
 
 import Data.List (intersperse)
-
 import qualified Data.Vector as V
--- import Data.Vector.Lens
 
 import Brick.Widgets.Core (withDefAttr)
 import Brick.Types
@@ -22,12 +22,8 @@ import Brick.Widgets.Border
 
 import Graphics.Vty.Input.Events
 
-import Brick.Widgets.Core
-  ( (<+>)
-  , (<=>)
-  , hLimit
-  , emptyWidget
-  )
+import Lens.Micro
+import Lens.Micro.TH
 
 data Table n h e = Table  {
   _tableName :: n
@@ -43,12 +39,11 @@ imap :: (Int -> a -> b) -> [a] -> [b]
 imap f = zipWith f [0..]
 
 makeTable :: forall n h e. n -> (Int -> n) -> Int -> [(h, Int, V.Vector e)] -> Table n h e
--- makeTable name size = Table name [] . imap convertTriple
-makeTable name listName size = Table name [] size False . imap convertTriple
+makeTable name listName' size = Table name [] size False . imap convertTriple
   where convertTriple :: Int -> (h, Int, V.Vector e) -> (h, Int, List n (RowMode, e))
         convertTriple i = (& _3 %~ toListWidget i)
 
-        toListWidget i v = list (listName i) (V.map (\x -> (Normal, x)) v) size
+        toListWidget i v = list (listName' i) (V.map (\x -> (Normal, x)) v) size
 
 makeLenses ''Table
 
@@ -65,8 +60,8 @@ vix i = lens (V.! i) (\v x -> v V.// [(i, x)])
 renderTable :: (Show n, Ord n) => Table n h e -> (h -> Widget n) -> (RowMode -> e -> Widget n) -> Widget n
 renderTable table renderHeader renderElem =
   let lists = table' ^. tableLists
-      writeHighlights table' i = table' & tableLists . each . _3
-                                        . listElementsL . vix i . _1 .~ Highlighted
+      writeHighlights t i = t & tableLists . each . _3
+                              . listElementsL . vix i . _1 .~ Highlighted
 
       table' = foldl writeHighlights table (table ^. rowWithHighlights)
       re _ (mode, elem')
@@ -107,6 +102,7 @@ partsOfVec = lens id replace
           | otherwise = V.slice 0 (V.length old) new
           where sl = max 0 $ V.length new - V.length old
 
+tableCellT :: Applicative f => Int -> ([e] -> f [e]) -> Table n h e -> f (Table n h e)
 tableCellT c = tableLists . ix c . _3 . listElementsL . vecElemsL . partsOf _2
 
 tableAddHighlight :: Table n e h -> [Int] -> Table n e h

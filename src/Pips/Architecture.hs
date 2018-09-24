@@ -3,11 +3,11 @@ module Pips.Architecture
   ( module Pips.Architecture
   ) where
 
-import FRP.Yampa
-
-import Data.Sequence (Seq)
+import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
+
+import           FRP.Yampa
 
 import Pips.Components
 import Pips.Instruction

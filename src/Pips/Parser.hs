@@ -2,16 +2,15 @@ module Pips.Parser
   ( module Pips.Parser
   ) where
 
-import Pips.Instruction ()
+import Data.Functor.Identity
+import Data.Maybe
 
 import Text.Parsec
-import Text.Parsec.String
 import Text.Parsec.Language (haskellDef)
-
+import Text.Parsec.String
 import qualified Text.Parsec.Token as Tok
 
-import Data.Maybe
-import Data.Functor.Identity
+import Pips.Instruction ()
 
 data InstructionName =
   AddN
@@ -142,7 +141,7 @@ binary :: Parser Int
 binary = do
   try (string "0b")
   s <- many1 (char '0' <|> char '1')
-  return $ sum [(read [d]) * 2 ^ e | (d, e) <- zip (reverse s) [0..]]
+  return $ sum [read [d] * 2 ^ e | (d, e) <- zip (reverse s) [0..]]
 
 natural, integer :: Parser Integer
 natural = Tok.natural lexer
@@ -165,7 +164,7 @@ lineNum' = fmap ((+(-1)) . sourceLine) getPosition
 
 parseRegName :: Parser RegName
 parseRegName = char '$' >>
-  ((RegAlias <$> identifier) <|> ((RegNum . fromIntegral) <$> natural))
+  ((RegAlias <$> identifier) <|> (RegNum . fromIntegral <$> natural))
 
 parseLabel :: Parser Token
 parseLabel = do
@@ -179,7 +178,7 @@ parseLabel = do
 
 labelRef :: Parser Label
 labelRef = (LabelName <$> identifier)
-             <|> ((LabelNum . fromIntegral) <$> posNumber)
+             <|> (LabelNum . fromIntegral <$> posNumber)
 
 parseMemAddr :: Parser MemAddr
 parseMemAddr = (MemAddrAlias <$> identifier) <|> (MemAddrNum <$> posNumber)
