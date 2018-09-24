@@ -1,16 +1,20 @@
-import FRP.Yampa
+import FRP.Yampa hiding (switch)
 
 import Data.Char (digitToInt, isDigit)
 import Data.IORef
 import Data.List
+import qualified Data.Map.Strict as M
 import Data.Either
 import Data.Foldable (toList)
+import Data.Semigroup ((<>))
 
 import Lens.Micro
 
 import Control.Monad
 import Control.DeepSeq
 import Control.Concurrent (forkIO)
+
+import Options.Applicative
 
 import Text.Parsec (parse)
 
@@ -19,6 +23,7 @@ import qualified Brick.Main as M
 import qualified Graphics.Vty as V
 import Graphics.Vty.Config (defaultConfig)
 
+import System.Directory
 import System.Exit
 import System.CPUTime
 import System.Environment
@@ -53,35 +58,40 @@ actuateDebug _ archComp = do
 benchIOAction :: NFData b => IO b -> IO Double
 benchIOAction a = do
   start <- getCPUTime
-  r <- a
-  end <- r `deepseq` getCPUTime
+  r     <- a
+  end   <- r `deepseq` getCPUTime
 
   return $ fromIntegral (end - start) / (10^12)
 
-run :: String -> Bool -> Maybe Integer -> IO ()
-run sourceFile debugMode benchmarkCycles = do
+runDebug archSF = do
+    reactimate (return True) (senseInput True) actuateDebug archSF
+    exitSuccess
 
-  s <- readFile sourceFile
-  let source = s ++ "\n "
-  let res    = assemble source
+runWithoutTui arch archSF numCycles = do
+  doneRef   <- newIORef False
+  resultRef <- newIORef arch
+  handle'   <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
 
-  when (isLeft res) $ do
-    let Left err = res
-    putStrLn err
-    exitFailure
+  secs <- benchIOAction $
+    forM_ [2..numCycles] $
+      return $ react handle' (10, Nothing)
 
-  let Right (Assembled reg mem insts endLabelMap) = res
+  putStrLn $ unwords ["Simulating for", show numCycles, "cycles took", show secs, "seconds"]
+  readIORef resultRef >>= print
+  exitSuccess
+
+run :: String -> IO ()
+run source = do
+  Assembled reg mem insts endLabelMap <- runEither $ assemble source
 
   let arch = init16x16 reg mem insts
       archSF = architecture arch endLabelMap
 
-      matchAlias dat entries = foldl (\acc (loc, al) -> acc & ix loc . _1 .~ al)
-                               (map (\x -> ("", x)) (toList dat)) alias
-        where alias = [(loc, al) | DataEntry loc (Just al) _ <- entries]
+      matchAlias entries dat = zipWith (\i d -> (M.findWithDefault "" i aliases, d)) [0..] (toList dat)
+        where aliases = M.fromList [(loc, al) | DataEntry loc (Just al) _ <- entries]
 
-  when debugMode $ do
-    reactimate (return True) (senseInput True) actuateDebug archSF
-    exitSuccess
+      matchAliasMem = matchAlias mem
+      matchAliasReg = matchAlias reg
 
   chanToUi     <- newBChan 16
   chanToYampa' <- newBChan 16
@@ -90,17 +100,6 @@ run sourceFile debugMode benchmarkCycles = do
 
   handle' <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
   handleRef <- newIORef handle'
-
-  when (has _Just benchmarkCycles) $ do
-    let Just cycles = benchmarkCycles
-
-    sec <- benchIOAction $
-      forM_ [2..cycles] $
-        return $ react handle' (10, Nothing)
-
-    putStrLn $ unwords ["Simulating for", show cycles, "cycles took", show sec]
-    readIORef resultRef >>= print
-    exitSuccess
 
   ref <- readIORef resultRef
   writeBChan chanToUi (ChangeEvent 1 ref)
@@ -122,8 +121,8 @@ run sourceFile debugMode benchmarkCycles = do
         archComp' <- readIORef resultRef
 
         when (c > 1) $ do
-          let regPairs = matchAlias (dRegister archComp') reg
-              memPairs = matchAlias (dMemory   archComp') mem
+          let regPairs = matchAliasReg $ dRegister archComp'
+              memPairs = matchAliasMem $ dMemory   archComp'
 
           writeBChan chanToUi (LoadMemory   memPairs)
           writeBChan chanToUi (LoadRegistry regPairs)
@@ -135,7 +134,7 @@ run sourceFile debugMode benchmarkCycles = do
         react handle (0, Nothing)
         writeIORef doneRef False
 
-        writeBChan chanToUi (ReloadEvent source (matchAlias (dRegister arch) reg) (matchAlias (dMemory   arch) mem))
+        writeBChan chanToUi (ReloadEvent source (matchAliasReg $ dRegister arch) (matchAliasMem $ dMemory arch))
         newHandle <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
         writeIORef handleRef newHandle
 
@@ -143,47 +142,104 @@ run sourceFile debugMode benchmarkCycles = do
         writeBChan chanToUi (ChangeEvent 1 archComp')
 
   putStrLn "Starting simulation"
-  let cfg = (V.mkVty defaultConfig)
+
+  let cfg = V.mkVty defaultConfig
   void $ M.customMain cfg (Just chanToUi) theApp
-       $ initialState chanToYampa' source (matchAlias (dRegister arch) reg)
-       $ matchAlias (dMemory arch) mem
+       $ initialState chanToYampa' source
+           (matchAliasReg $ dRegister arch)
+           (matchAliasMem $ dMemory arch)
+
+
+data ProgMode =
+  ProgSim
+  | ProgSimDebug
+  | ProgSimWithTui Int
+  | ProgAssemblerOutput
+  | ProgParserOutput
+  deriving (Eq, Show)
+
+data CmdArgs = CmdArgs
+  { argsSource :: FilePath
+  , argsProgMod :: ProgMode
+  }
+  deriving (Eq, Show)
+
+cmdArgsProgMode :: Parser ProgMode
+cmdArgsProgMode =
+      pure ProgSim
+  <|> ProgSimWithTui
+        <$> option auto
+          (    long "no-tui"
+            <> help "Runs the simulator for N cycles, without the tui"
+            <> metavar "N" )
+  <|> const ProgSimDebug
+        <$> switch
+          (    long "debug"
+            <> help "Run the simulator in debug mode" )
+  <|> const ProgAssemblerOutput
+        <$> switch
+          (    long "assembler-output"
+            <> help "Output the assembler's output, and stop the program" )
+  <|> const ProgParserOutput
+        <$> switch
+          (    long "parser-output"
+            <> help "Output the parser's output, and stop the program" )
+
+cmdArgs :: Parser CmdArgs
+cmdArgs = CmdArgs
+  <$> argument str
+    (    metavar "SOURCE_FILE"
+      <> help "Assembly file to run" )
+  <*> cmdArgsProgMode
+
+runEither :: Either String a -> IO a
+runEither (Left e)  = putStrLn e >> exitFailure
+runEither (Right x) = return x
+
+runEitherShow :: Show e => Either e a -> IO a
+runEitherShow (Left e)  = runEither (Left $ show e)
+runEitherShow (Right x) = runEither (Right x)
 
 main :: IO ()
 main = do
-  args <- getArgs
+  let opts = info (cmdArgs <**> helper)
+        (    fullDesc
+          <> progDesc "Simulate SOURCE_FILE"
+          <> header "pips - a simulator for a poor man's MIPS architecture" )
 
-  let sourceFiles = filter (not . isPrefixOf "--") args
+  args <- execParser opts
 
-  when (null sourceFiles) $ do
-    putStrLn "No source file specified."
+  let sourceFile = argsSource args
+
+  b <- doesFileExist sourceFile
+  unless b $ do
+    putStrLn $ "File does not exist: " ++ sourceFile
     exitFailure
 
-  let sourceFile = head sourceFiles
   putStrLn $ "source file: " ++ sourceFile
 
-  when ("--parser-output" `elem` args) $ do
-    source <- readFile sourceFile
+  s <- readFile sourceFile
+  let source = s ++ "\n"
 
-    case parse parseFile sourceFile source of
-      Left err -> print err >> exitFailure
-      Right (rd, md, tokens) -> do
-        putStrLn "Reg data:"
-        mapM_ print rd
+  case argsProgMod args of
+    ProgSim ->
+      run source
 
-        putStrLn "\nMemory data:"
-        mapM_ print md
+    ProgParserOutput -> do
+      (rd, md, tokens ) <- runEitherShow $ parse parseFile sourceFile source
+      putStrLn "Reg data:"
+      mapM_ print rd
 
-        putStrLn "\nTokens:"
-        mapM_ print tokens
+      putStrLn "\nMemory data:"
+      mapM_ print md
 
-        exitSuccess
+      putStrLn "\nTokens:"
+      mapM_ print tokens
 
-  when ("--assembler-output" `elem` args) $ do
-    source <- readFile sourceFile
+      exitSuccess
 
-    case assemble source of
-      Left err -> print err >> exitFailure
-      Right (Assembled rd md ints _) -> do
+    ProgAssemblerOutput -> do
+        Assembled rd md ints _ <- runEither $ assemble source
         putStrLn "Reg data:"
         mapM_ print rd
 
@@ -195,15 +251,13 @@ main = do
 
         exitSuccess
 
-  let benchmarkCycles = do
-        i      <- elemIndex "--benchmark" args
-        cycles <- args ^? ix (i + 1)
-        let toDigit c
-              | isDigit c  = Just . fromIntegral $ digitToInt c
-              | otherwise = Nothing
+    mode -> do
+      Assembled reg mem insts endLabelMap <- runEither $ assemble source
+      let arch = init16x16 reg mem insts
+          archSF = architecture arch endLabelMap
 
-        ds <- mapM toDigit cycles
-
-        return (foldl (\acc c -> acc * 10 + c) 0 ds)
-
-  run sourceFile ("--debug" `elem` args) benchmarkCycles
+      case mode of
+        ProgSimWithTui n ->
+          runWithoutTui arch archSF n
+        _               ->
+          runDebug archSF

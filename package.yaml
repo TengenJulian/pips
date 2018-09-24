@@ -31,6 +31,8 @@ dependencies:
 - vector
 - text
 - containers
+- optparse-applicative
+- directory
 
 library:
   source-dirs: src
