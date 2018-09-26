@@ -7,11 +7,19 @@ import qualified Data.Map.Lazy as M
 
 import Data.List (findIndex)
 import Data.Maybe (fromMaybe)
+import qualified Data.Vector as V
 
 import Text.Parsec (parse)
 
 import Pips.Parser
 import Pips.Instruction
+
+data Assembled = Assembled
+  { asmdRegData :: [DataEntry]
+  , asmdMemData :: [DataEntry]
+  , asmdInsts :: [Instruction]
+  , asmdEndLabelMapping :: V.Vector Int
+  }
 
 removeRegAlias :: M.Map String Int -> RegName -> RegName
 removeRegAlias _ r@(RegNum _) = r
@@ -27,12 +35,13 @@ removeMemAlias entries (MemAddrAlias name) =
     Just a -> MemAddrNum a
     _      -> error ("Memory Address " ++ name ++ " not defined.")
 
-removeLabelAlias :: Int -> [Int] -> M.Map String Int -> Label -> Label
-removeLabelAlias _ _ _ l@(LabelNum _) = l
-removeLabelAlias len lineNums entries (LabelName name) =
-  case M.lookup name entries of
-    Just l -> LabelNum (fromMaybe len (findIndex (l <) lineNums))
-    _      -> error ("Label " ++ name ++ " not defined.")
+removeLabelAlias :: Int -> [Int] -> M.Map String Int -> M.Map String Int -> Label -> Label
+removeLabelAlias _ _ _ _ l@(LabelNum _) = l
+removeLabelAlias len lineNums endLabels labels (LabelName name) =
+  case (M.lookup name labels, M.lookup name endLabels) of
+    (Just l, _) -> LabelNum (fromMaybe len (findIndex (l <) lineNums))
+    (_, Just i) -> LabelNum i
+    _           -> error ("Label " ++ name ++ " not defined.")
 
 isInstruction :: Token -> Bool
 isInstruction ins = case ins of
@@ -42,8 +51,8 @@ isInstruction ins = case ins of
 
 -- | This function removes memory/register aliases and converts jump targets in source lines,
 -- to jump target in PC offset.
-removeAliases :: [DataEntry] -> [DataEntry] -> [Token] -> [Token]
-removeAliases regData memData tokens = map f ins
+removeAliases :: [DataEntry] -> [DataEntry] -> [Token] -> (V.Vector Int, [Token])
+removeAliases regData memData tokens = (endLabelMapping, map f ins)
   where labels = [l | l@(LabelToken _ _) <- tokens]
         ins = filter isInstruction tokens
 
@@ -52,7 +61,16 @@ removeAliases regData memData tokens = map f ins
 
         lines' = map tokenLineNum ins
         len = length lines'
-        rla = removeLabelAlias len lines' (M.fromList [(name, l) | LabelToken l name <- labels])
+
+        lastInLineNum | null ins = 0
+                      | otherwise = tokenLineNum $ last $ ins
+
+        endLabels = [lt | lt@(LabelToken l name) <- labels, l > lastInLineNum]
+        endLabelMapping = V.fromList [l | LabelToken l name <- endLabels]
+
+        rla = removeLabelAlias len lines'
+          (M.fromList $ [(name, len + i) | (i, (LabelToken l name)) <- zip [0..] endLabels])
+          (M.fromList [(name, l) | LabelToken l name <- labels, l < lastInLineNum])
 
         f (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)
         f (Reg3Token l name r1 r2 r3)      = Reg3Token   l name (rra r1) (rra r2) (rra r3)
@@ -120,9 +138,15 @@ showLeft :: Show a => Either a b -> Either String b
 showLeft (Right x) = Right x
 showLeft (Left err)  = Left (show err)
 
-assemble :: String -> Either String ([DataEntry], [DataEntry], [Instruction])
+assemble :: String -> Either String Assembled
 assemble source = do
   (regData, memData, tokens) <- showLeft $ parse parseFile "" source
-  let ints = map assembleToken (removeAliases regData memData tokens)
+  let (endLabelMapping, tokens') = removeAliases regData memData tokens
+      insts = map assembleToken tokens'
 
-  return (regData, memData, ints)
+  return Assembled
+    { asmdRegData = regData
+    , asmdMemData = memData
+    , asmdInsts = insts
+    , asmdEndLabelMapping = endLabelMapping
+    }

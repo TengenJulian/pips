@@ -64,9 +64,13 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       newPc    <- delay 10 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
       prevDone <- delay 20 (V.null insts) -< returnA done
 
-    let ln | prevDone     = Nothing
-           | otherwise    = Just $ lineNum $ insts V.! i
-          where i = min (V.length insts - 1) pc
+    let ln | prevDone         = Nothing
+           | otherwise    =
+             case (endLabelMap V.!? endIndex, insts V.!? pc) of
+               (Just l, _)    -> Just l
+               (_, Just inst) -> Just $ lineNum inst
+               _              -> Nothing
+           where endIndex  = pc - V.length insts
 
     let debugMsg = unlines [
             "Clock: " ++ show c

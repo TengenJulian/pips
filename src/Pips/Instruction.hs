@@ -40,9 +40,6 @@ data Instruction =
     , lineNum :: Int
   } deriving (Eq, Show)
 
-nop :: Instruction
-nop = Instruction ROpc R 0 0 0 0 0 SllOp "" 0 0
-
 data InstructionType = R | I | J deriving (Show, Eq)
 
 data AluOp = AddOp | SubOp | MulOp | AndOp | OrOp | SllOp | SrlOp | SltOp | JrOp | XorOp | LuiOp deriving (Show, Eq)
@@ -77,3 +74,8 @@ instance Enum AluOp where
   -- non conform mips
   fromEnum LuiOp = 0x50
 
+nop :: Instruction
+nop = Instruction ROpc R 0 0 0 0 0 SllOp "" 0 0
+
+isBranchInst :: Instruction -> Bool
+isBranchInst inst = opCode inst `elem` [JOpc, BeqOpc, BneOpc] || aluOp inst == JrOp

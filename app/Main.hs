@@ -70,12 +70,13 @@ run sourceFile debugMode benchmarkCycles = do
     putStrLn err
     exitFailure
 
-  let Right (reg, mem, insts) = res
+  let Right (Assembled reg mem insts endLabelMap) = res
 
   let arch = init16x16 reg mem insts
-      archSF = architecture arch
+      archSF = architecture arch endLabelMap
 
-      matchAlias dat entries = foldl (\acc (loc, al) -> acc & ix loc . _1 .~ al) (map (\x -> ("", x)) (toList dat)) alias
+      matchAlias dat entries = foldl (\acc (loc, al) -> acc & ix loc . _1 .~ al)
+                               (map (\x -> ("", x)) (toList dat)) alias
         where alias = [(loc, al) | DataEntry loc (Just al) _ <- entries]
 
   when debugMode $ do
@@ -182,7 +183,7 @@ main = do
 
     case assemble source of
       Left err -> print err >> exitFailure
-      Right (rd, md, ints) -> do
+      Right (Assembled rd md ints _) -> do
         putStrLn "Reg data:"
         mapM_ print rd
 

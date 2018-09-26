@@ -49,7 +49,7 @@ makeTable name listName size = Table name [] size False . imap convertTriple
         convertTriple i = (& _3 %~ toListWidget i)
 
         toListWidget i v = list (listName i) (V.map (\x -> (Normal, x)) v) size
-          
+
 makeLenses ''Table
 
   -- basicly apply event handler on all the third elements of the list of triples.
