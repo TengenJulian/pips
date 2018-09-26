@@ -28,7 +28,11 @@ data AssembleError =
   | InvalidImm Int Int
   | InvalidShamt Int Int
   | InvalidAddr Int Int
-  | InvalidDataEntry Int (Maybe String) Int
+  | UndefinedRegAlias Int String
+  | UndefinedMemAlias Int String
+  | UndefinedJumpLabel Int String
+  | InvalidRegEntry Int (Maybe String) Int
+  | InvalidMemEntry Int (Maybe String) Int
   deriving (Eq)
 
 maxNBits :: Int -> Int
@@ -52,54 +56,72 @@ instance Show AssembleError where
   show (ParsecError e) = show e
   show (InvalidImm l n) = intercalate " "
     [ "Invalid signed immediate value, "
-    , show n, ", at line", show l ++ "."
+    , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validSignedBounds 16
     ]
   show (InvalidSignedImm l n) = intercalate " "
     [ "Invalid immediate value, "
-    , show n, ", at line", show l ++ "."
+    , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validUnsignedBounds 16
     ]
   show (InvalidShamt l n) = intercalate " "
     [ "Invalid shift amount, "
-    , show n, ", at line", show l ++ "."
+    , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validUnsignedBounds 5
     ]
   show (InvalidAddr l n) = intercalate " "
     [ "Invalid jump addr, "
-    , show n, ", at line", show l ++ "."
+    , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validUnsignedBounds 26
     ]
-  show (InvalidDataEntry i alias val) = intercalate " "
+  show (InvalidMemEntry i alias val) = intercalate " "
     [ "Invalid Data entry value, "
-    , show val, ", at index", show i
-      ++ aliasMsg alias ++ "."
+    , show val ++ aliasMsg alias
     , expectedRangeMsg $ validSignedBounds 32
     ]
-    where aliasMsg (Just al) = ", for alias " ++ al
-          aliasMsg _            = ""
+    where aliasMsg (Just al) = ", for memory address $" ++ al ++ "."
+          aliasMsg _         = ", for memory address $" ++ show i ++ "."
+  show (InvalidRegEntry i alias val) = intercalate " "
+    [ "Invalid Data entry value, "
+    , show val ++ aliasMsg alias
+    , expectedRangeMsg $ validSignedBounds 32
+    ]
+    where aliasMsg (Just al) = ", for reg $" ++ al ++ "."
+          aliasMsg _         = ", for reg $" ++ show i ++ "."
+  show (UndefinedRegAlias l name) = intercalate " "
+    [ "Undefined reg alias,"
+    , name ++ ", at line", show l ++ "."
+    ]
+  show (UndefinedMemAlias l name) = intercalate " "
+    [ "Undefined mem alias,"
+    , name ++ ", at line", show l ++ "."
+    ]
+  show (UndefinedJumpLabel l name) = intercalate " "
+    [ "Undefined jump label,"
+    , name ++ ", at line", show l ++ "."
+    ]
 
-removeRegAlias :: M.Map String Int -> RegName -> RegName
-removeRegAlias _ r@(RegNum _) = r
-removeRegAlias entries (RegAlias name) =
+removeRegAlias :: M.Map String Int -> Int -> RegName -> Either AssembleError RegName
+removeRegAlias _ _ r@(RegNum _) = Right r
+removeRegAlias entries ln (RegAlias name) =
   case M.lookup name entries of
-    Just r -> RegNum (fromIntegral r)
-    _      -> error ("Register $" ++ name ++ " not defined.")
+    Just r -> Right . RegNum $ fromIntegral r
+    _      -> Left $ UndefinedRegAlias ln name
 
-removeMemAlias :: M.Map String Int -> MemAddr -> MemAddr
-removeMemAlias _ m@(MemAddrNum _) = m
-removeMemAlias entries (MemAddrAlias name) =
+removeMemAlias :: M.Map String Int -> Int -> MemAddr -> Either AssembleError MemAddr
+removeMemAlias _ _ m@(MemAddrNum _) = Right m
+removeMemAlias entries ln (MemAddrAlias name) =
   case M.lookup name entries of
-    Just a -> MemAddrNum a
-    _      -> error ("Memory Address " ++ name ++ " not defined.")
+    Just a -> Right $ MemAddrNum a
+    _      -> Left $ UndefinedMemAlias ln name
 
-removeLabelAlias :: Int -> [Int] -> M.Map String Int -> M.Map String Int -> Label -> Label
-removeLabelAlias _ _ _ _ l@(LabelNum _) = l
-removeLabelAlias len lineNums endLabels labels (LabelName name) =
+removeLabelAlias :: Int -> [Int] -> M.Map String Int -> M.Map String Int -> Int -> Label -> Either AssembleError Label
+removeLabelAlias _ _ _ _ _ l@(LabelNum _) = Right l
+removeLabelAlias len lineNums endLabels labels ln (LabelName name) =
   case (M.lookup name labels, M.lookup name endLabels) of
-    (Just l, _) -> LabelNum . fromIntegral $ fromMaybe len (findIndex (l <) lineNums)
-    (_, Just i) -> LabelNum . fromIntegral $ i
-    _           -> error ("Label " ++ name ++ " not defined.")
+    (Just l, _) -> Right . LabelNum . fromIntegral $ fromMaybe len (findIndex (l <) lineNums)
+    (_, Just i) -> Right . LabelNum . fromIntegral $ i
+    _           -> Left . UndefinedJumpLabel ln $ name
 
 isInstruction :: Token -> Bool
 isInstruction ins = case ins of
@@ -107,10 +129,10 @@ isInstruction ins = case ins of
   LabelToken _ _   -> False
   _                -> True
 
--- | This function removes memory/register aliases and converts jump targets in source lines,
+-- | This function removes memory/register aliases and converts jump targets in source code,
 -- to jump target in PC offset.
-removeAliases :: [DataEntry n] -> [DataEntry n] -> [Token] -> (V.Vector Int, [Token])
-removeAliases regData memData tokens = (endLabelMapping, map f ins)
+removeAliases :: [DataEntry n] -> [DataEntry n] -> [Token] -> Either AssembleError (V.Vector Int, [Token])
+removeAliases regData memData tokens = (,) <$> return endLabelMapping <*> mapM f ins
   where labels = [l | l@(LabelToken _ _) <- tokens]
         ins = filter isInstruction tokens
 
@@ -130,43 +152,49 @@ removeAliases regData memData tokens = (endLabelMapping, map f ins)
           (M.fromList [(name, len + i) | (i, LabelToken _ name) <- zip [0..] endLabels])
           (M.fromList [(name, l) | LabelToken l name <- labels, l < lastInLineNum])
 
-        f (BranchToken l name r1 r2 label) = BranchToken l name (rra r1) (rra r2) (rla label)
-        f (Reg3Token l name r1 r2 r3)      = Reg3Token   l name (rra r1) (rra r2) (rra r3)
-        f (MemOpToken l name r1 m1 r2)     = MemOpToken  l name (rra r1) (rma m1) (rra r2)
-        f (Reg2iToken l name r1 r2 v)      = Reg2iToken  l name (rra r1) (rra r2) v
+        f (BranchToken l name r1 r2 label) = BranchToken l name <$> rra l r1 <*> rra l r2 <*> rla l label
+        f (Reg3Token l name r1 r2 r3)      = Reg3Token   l name <$> rra l r1 <*> rra l r2 <*> rra l r3
+        f (MemOpToken l name r1 m1 r2)     = MemOpToken  l name <$> rra l r1 <*> rma l m1 <*> rra l r2
+        f (Reg2iToken l name r1 r2 v)      = Reg2iToken  l name <$> rra l r1 <*> rra l r2 <*> return v
 
-        f (LuiToken l r1 v) = LuiToken l (rra r1) v
+        f (LuiToken l r1 v) = LuiToken l <$> rra l r1 <*> return v
 
-        f (JrToken l r1)   = JrToken l (rra r1)
-        f (JToken l label) = JToken  l (rla label)
+        f (JrToken l r1)   = JrToken l <$> rra l r1
+        f (JToken l label) = JToken  l <$> rla l label
 
         f token
           | isInstruction token = error ("preprocess Token not implemented for " ++ show token)
-          | otherwise           = token
+          | otherwise           = Right token
 
-convertImm, convertSignedImm, convertShamt :: Int -> Int -> Either AssembleError UInt
-convertSignedImm l x
-  | validSigned 16 x = Right $ fromIntegral x
-  | otherwise        = Left $ InvalidSignedImm l x
+conversionHelper :: (Int -> Bool) -> Int -> e -> Either e UInt
+conversionHelper p x e
+  | p x       = Right $ fromIntegral x
+  | otherwise = Left e
 
-convertImm l x
-  | validUnsigned 16 x = Right $ fromIntegral x
-  | otherwise          = Left $ InvalidImm l x
+convertImm, convertSignedImm, convertShamt, convertAddr :: Int -> Int -> Either AssembleError UInt
 
-convertShamt l x
-  | validUnsigned 5 x = Right $ fromIntegral x
-  | otherwise         = Left $ InvalidShamt l x
+convertSignedImm l x = conversionHelper (validSigned 16) x $ InvalidSignedImm l x
+convertImm       l x = conversionHelper (validSigned 16) x $ InvalidImm l x
+convertAddr      l x = conversionHelper (validSigned 26) x $ InvalidAddr l x
+convertShamt     l x = conversionHelper (validSigned 5)  x $ InvalidShamt l x
 
-convertAddr :: Int -> Int -> Either AssembleError UInt
-convertAddr l addr
-  | validSigned 26 addr = Right $ fromIntegral addr
-  | otherwise = Left $ InvalidAddr l addr
+convertEntry :: DataEntry Int -> Either (Int, Maybe String, Int) (DataEntry UInt)
+convertEntry (DataEntry i alias val)
+  | validSigned 32 val = Right $ DataEntry i alias (fromIntegral val)
+  | otherwise          = Left (i, alias, val)
 
-convertEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
-convertEntries = mapM f
-  where f (DataEntry i alias val)
-          | validSigned 32 val = Right $ DataEntry i alias (fromIntegral val)
-          | otherwise          = Left  $ InvalidDataEntry i alias val
+mapLeft :: (e -> e') -> Either e b -> Either e' b
+mapLeft _ (Right x) = Right x
+mapLeft f (Left err)  = Left (f err)
+
+uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
+uncurry3 f (a, b, c) = f a b c
+
+convertRegEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
+convertRegEntries = mapM (mapLeft (uncurry3 InvalidRegEntry) . convertEntry)
+
+convertMemEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
+convertMemEntries = mapM (mapLeft (uncurry3 InvalidMemEntry) . convertEntry)
 
 reg3Assemble :: Token -> Either AssembleError Instruction
 reg3Assemble (Reg3Token l _ (RegNum r1) (RegNum r2) (RegNum r3)) =
@@ -219,17 +247,13 @@ assembleToken (JToken l (LabelNum l1)) =
 
 assembleToken t = error ("Could not assemble token " ++ show t)
 
-mapLeft :: (e -> e') -> Either e b -> Either e' b
-mapLeft _ (Right x) = Right x
-mapLeft f (Left err)  = Left (f err)
-
 assemble :: String -> Either AssembleError Assembled
 assemble source = do
   (regData, memData, tokens') <- mapLeft ParsecError $ parse parseFile "" source
-  let (endLabelMapping, tokens) = removeAliases regData memData tokens'
+  (endLabelMapping, tokens)   <- removeAliases regData memData tokens'
 
   Assembled
-    <$> convertEntries regData
-    <*> convertEntries memData
+    <$> convertRegEntries regData
+    <*> convertMemEntries memData
     <*> mapM assembleToken tokens
     <*> return endLabelMapping
