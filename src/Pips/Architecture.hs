@@ -7,6 +7,7 @@ import FRP.Yampa
 
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
+import qualified Data.Vector as V
 
 import Pips.Components
 import Pips.Instruction
@@ -16,7 +17,7 @@ import Pips.Assembler
 data ArchitectureComp = ArchitectureComp {
   dMemory :: Seq Int
   , dRegister :: Seq Int
-  , dInstructions :: Seq Instruction
+  , dInstructions :: V.Vector Instruction
   , dMemoryChange :: Maybe Int
   , dRegisterChange :: Maybe Int
   , dLineNum :: Maybe Int
@@ -27,7 +28,7 @@ init16x16 :: [DataEntry] -> [DataEntry] -> [Instruction] -> ArchitectureComp
 init16x16 reg mem inst = ArchitectureComp {
   dMemory = initMem emptyData mem
   , dRegister = initMem emptyData reg
-  , dInstructions   = S.fromList inst
+  , dInstructions   = V.fromList inst
   , dMemoryChange   = Nothing
   , dRegisterChange = Nothing
   , dLineNum = Nothing
@@ -35,8 +36,8 @@ init16x16 reg mem inst = ArchitectureComp {
   }
   where emptyData = S.fromList $ replicate 16 0
 
-architecture :: ArchitectureComp -> SF Bool ArchitectureComp
-architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = insts} =
+architecture :: ArchitectureComp -> V.Vector Int -> SF Bool ArchitectureComp
+architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = insts} endLabelMap =
   let register = regMem reg
       im = instMem insts
       memory = mainMem mem
@@ -47,7 +48,7 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       (pc, inst) <- im -< newPc
       cont     <- control -< (c, inst)
 
-      let done = S.null insts || pc >= S.length insts
+      let done = V.null insts || pc >= V.length insts
 
       regComp  <- register    -< (cont, rs inst, rt inst, rd inst, writeBack)
 
@@ -61,11 +62,11 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       let nextPc = if done then pc else pc + 1
 
       newPc    <- delay 10 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
-      prevDone <- delay 20 (S.null insts) -< returnA done
+      prevDone <- delay 20 (V.null insts) -< returnA done
 
     let ln | prevDone     = Nothing
-           | otherwise    = Just $ lineNum $ S.index insts i
-           where i = min (S.length insts - 1) pc
+           | otherwise    = Just $ lineNum $ insts V.! i
+          where i = min (V.length insts - 1) pc
 
     let debugMsg = unlines [
             "Clock: " ++ show c

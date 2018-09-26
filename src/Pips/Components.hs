@@ -6,8 +6,11 @@ module Pips.Components
 import FRP.Yampa
 import Data.Bits
 
+import Data.Maybe (fromMaybe)
+
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
+import qualified Data.Vector as V
 
 
 import Pips.Instruction
@@ -94,16 +97,10 @@ control = proc (c, inst) -> do
 
   returnA -< Control aluSrc' branchAct' memAct' regAct' regWriteSrc' regWriteData'
 
-safeGet :: Seq a -> a -> Int -> a
-safeGet xs x i
-  | i < 0 = x
-  | i >= length xs = x
-  | otherwise = S.index xs i
-
-instMem :: Seq Instruction -> SF Int (Int, Instruction)
+instMem :: V.Vector Instruction -> SF Int (Int, Instruction)
 instMem mem = proc pc -> do
   newPc <- delay 10 0 -< pc
-  returnA -< (newPc, safeGet mem nop newPc)
+  returnA -< (newPc, fromMaybe nop (mem V.!? newPc))
 
 data RegComp = RegComp {
     regData :: Seq Int
@@ -114,6 +111,12 @@ data RegComp = RegComp {
 
 initMem :: Seq Int -> [DataEntry] -> Seq Int
 initMem = foldl (\mem' (DataEntry loc _ val) -> S.update loc val mem')
+
+safeGet :: Seq a -> a -> Int -> a
+safeGet xs x i
+  | i < 0 = x
+  | i >= length xs = x
+  | otherwise = S.index xs i
 
 regMem :: Seq Int -> SF (Control, Int, Int, Int, Int) RegComp
 regMem mem = proc (cont, rs', rt', rd', writeData) -> do
