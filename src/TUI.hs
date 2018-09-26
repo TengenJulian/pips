@@ -108,21 +108,20 @@ data TableCell = StringCell String | IntCell Int | ValueCell UInt deriving (Show
 
 makeLenses ''St
 
-base :: Int -> Int -> [Int]
-base n x
-  | x == 0    = [0]
-  | otherwise = go x []
-  where go 0  r = r
-        go x' r = go (x' `quot` n) (x' `mod` n : r)
+base :: Int -> Int -> Int -> [Int]
+base b k x = go k x []
+  where go 0 _ r = r
+        go l 0  r = go (l - 1) 0 (0 : r)
+        go l x' r = go (l - 1) (x' `quot` b) (x' `mod` b : r)
 
 fmtNumber :: NumberFormat -> Int -> String
 fmtNumber DecimalFormat = show
-fmtNumber HexFormat     = ("0x" ++) . map toHex . base 16
+fmtNumber HexFormat     = ("0x" ++) . map toHex . base 16 8
   where toHex x
           | 0 <= x && x <= 9   = intToDigit x
           | 10 <= x && x <= 15 = chr (ord 'a' + x - 10)
           | otherwise          = 'f'
-fmtNumber BinaryFormat  = ("0b" ++) . map intToDigit . base 2
+fmtNumber BinaryFormat  = ("0b" ++) . map intToDigit . base 2 32
 
 drawLeftAligned :: String -> Widget n
 drawLeftAligned = padRight T.Max . str
