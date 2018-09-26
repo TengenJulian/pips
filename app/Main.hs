@@ -46,9 +46,9 @@ actuate doneRef resultRef _ output = do
   writeIORef resultRef output
   return done
 
-actuateDebug :: Bool -> ArchitectureComp -> IO Bool
+actuateDebug :: Bool -> ArchComp -> IO Bool
 actuateDebug _ archComp = do
-  putStrLn $ dDebug archComp
+  putStrLn $ archDebug archComp
   return False
 
 -- | Returns the number of seconds it took the action to complete.
@@ -60,12 +60,12 @@ benchIOAction a = do
 
   return $ fromIntegral (end - start) / (10^(12 :: Int))
 
-runDebug :: SF Bool ArchitectureComp -> IO ()
+runDebug :: SF Bool ArchComp -> IO ()
 runDebug archSF = do
     reactimate (return True) (senseInput True) actuateDebug archSF
     exitSuccess
 
-runWithoutTui :: ArchitectureComp -> SF Bool ArchitectureComp -> Int -> IO ()
+runWithoutTui :: ArchComp -> SF Bool ArchComp -> Int -> IO ()
 runWithoutTui arch archSF numCycles = do
   doneRef   <- newIORef False
   resultRef <- newIORef arch
@@ -120,8 +120,8 @@ run source' = do
         archComp' <- readIORef resultRef
 
         when (c > 1) $ do
-          let regPairs = matchAliasReg $ dRegister archComp'
-              memPairs = matchAliasMem $ dMemory   archComp'
+          let regPairs = matchAliasReg $ archReg archComp'
+              memPairs = matchAliasMem $ archMem   archComp'
 
           writeBChan chanToUi (LoadMemory   memPairs)
           writeBChan chanToUi (LoadRegistry regPairs)
@@ -133,7 +133,7 @@ run source' = do
         react handle (0, Nothing)
         writeIORef doneRef False
 
-        writeBChan chanToUi (ReloadEvent source' (matchAliasReg $ dRegister arch) (matchAliasMem $ dMemory arch))
+        writeBChan chanToUi (ReloadEvent source' (matchAliasReg $ archReg arch) (matchAliasMem $ archMem arch))
         newHandle <- reactInit (return False) (const $ actuate doneRef resultRef) archSF
         writeIORef handleRef newHandle
 
@@ -145,8 +145,8 @@ run source' = do
   let cfg = V.mkVty defaultConfig
   void $ M.customMain cfg (Just chanToUi) theApp
        $ initialState chanToYampa' source'
-           (matchAliasReg $ dRegister arch)
-           (matchAliasMem $ dMemory arch)
+           (matchAliasReg $ archReg arch)
+           (matchAliasMem $ archMem arch)
 
 data ProgMode =
   ProgSim

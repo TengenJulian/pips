@@ -36,8 +36,8 @@ import qualified Graphics.Vty as V
 import           Lens.Micro
 import           Lens.Micro.TH
 
-import Pips.Architecture ( ArchitectureComp, dLineNum, dMemory, dRegister,
-                           dRegisterChange, dMemoryChange )
+import Pips.Architecture ( ArchComp, archLineNum, archMem, archReg,
+                           archRegChange, archMemChange )
 import Pips.Common
 
 import TUI.Table
@@ -84,7 +84,7 @@ data St =
        }
 
 data AppEvent = VtyEvent V.Event
-              | ChangeEvent Int ArchitectureComp
+              | ChangeEvent Int ArchComp
               | DataChangeEvent [DataChange] Int
               | SetDataEvent [Int] [Int]
               | ReloadEvent String [(String, UInt)] [(String, UInt)]
@@ -235,9 +235,9 @@ handleEvent st (T.AppEvent (ChangeEvent cycles archComp)) =
       updateData dat (Just r) = (& tableCellT 2 . ix r .~ ValueCell (S.index dat r)) . flip tableSetHighlight [r]
 
   in  M.continue $ st & clockCycles %~ (+ cycles)
-                      & memory   %~ updateData  (dMemory archComp)   (dMemoryChange archComp)
-                      & source   %~ tableMoveTo (dLineNum archComp)
-                      & register %~ updateData  (dRegister archComp) (dRegisterChange archComp)
+                      & register %~ updateData  (archReg archComp) (archRegChange archComp)
+                      & memory   %~ updateData  (archMem archComp) (archMemChange archComp)
+                      & source   %~ tableMoveTo (archLineNum archComp)
 
 handleEvent st (T.VtyEvent e) = handleVtyEvent st e
 handleEvent st _              = M.continue st

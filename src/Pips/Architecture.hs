@@ -14,31 +14,30 @@ import Pips.Components
 import Pips.Instruction
 import Pips.Assembler
 
--- o is for data. Fairly arbitrairy, but it does prevent names clashes.
-data ArchitectureComp = ArchitectureComp {
-  dMemory :: Seq UInt
-  , dRegister :: Seq UInt
-  , dInstructions :: V.Vector Instruction
-  , dMemoryChange :: Maybe Int
-  , dRegisterChange :: Maybe Int
-  , dLineNum :: Maybe Int
-  , dDebug :: String
+data ArchComp = ArchComp {
+  archMem :: Seq UInt
+  , archReg :: Seq UInt
+  , archInsts :: V.Vector Instruction
+  , archMemChange :: Maybe Int
+  , archRegChange :: Maybe Int
+  , archLineNum :: Maybe Int
+  , archDebug :: String
   } deriving (Show, Eq)
 
-init16x16 :: [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchitectureComp
-init16x16 reg mem inst = ArchitectureComp {
-  dMemory = initMem emptyData mem
-  , dRegister = initMem emptyData reg
-  , dInstructions   = V.fromList inst
-  , dMemoryChange   = Nothing
-  , dRegisterChange = Nothing
-  , dLineNum = Nothing
-  , dDebug = ""
+init16x16 :: [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchComp
+init16x16 reg mem inst = ArchComp {
+  archMem         = initMem emptyData mem
+  , archReg       = initMem emptyData reg
+  , archInsts     = V.fromList inst
+  , archMemChange = Nothing
+  , archRegChange = Nothing
+  , archLineNum   = Nothing
+  , archDebug     = ""
   }
   where emptyData = S.fromList $ replicate 16 0
 
-architecture :: ArchitectureComp -> V.Vector Int -> SF Bool ArchitectureComp
-architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = insts} endLabelMap =
+architecture :: ArchComp -> V.Vector Int -> SF Bool ArchComp
+architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabelMap =
   let register = regMem reg
       im = instMem insts
       memory = mainMem mem
@@ -87,12 +86,12 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
             , "ln: " ++ show ln
             ]
 
-    returnA -< ArchitectureComp {
-      dMemory           = memData memComp
-      , dMemoryChange   = deltaMem memComp
-      , dRegister       = regData regComp
-      , dRegisterChange = deltaReg regComp
-      , dInstructions   = insts
-      , dLineNum        = ln
-      , dDebug          = if debug then debugMsg else ""
+    returnA -< ArchComp {
+      archMem         = memData memComp
+      , archMemChange = deltaMem memComp
+      , archReg       = regData regComp
+      , archRegChange = deltaReg regComp
+      , archInsts     = insts
+      , archLineNum   = ln
+      , archDebug     = if debug then debugMsg else ""
       }
