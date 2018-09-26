@@ -1,4 +1,5 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE MagicHash #-}
 module Pips.Components
   ( module Pips.Components
   ) where
@@ -11,6 +12,7 @@ import qualified Data.Vector as V
 
 import           FRP.Yampa
 
+import Pips.Common
 import Pips.Instruction
 import Pips.Assembler
 
@@ -31,7 +33,7 @@ clock :: SF Clock Clock
 clock = loopPre Falling $ proc (_, state) ->
   returnA -< (flipClock state, flipClock state)
 
-alu :: SF (AluOp, Int, Int) (Int, Bool)
+alu :: SF (AluOp, UInt, UInt) (UInt, Bool)
 alu = proc (aluOp', left', right') -> do
   let result = case aluOp' of
         MulOp -> left' * right'
@@ -39,9 +41,9 @@ alu = proc (aluOp', left', right') -> do
         SubOp -> left' - right'
         AndOp -> left' .&. right'
         OrOp  -> left' .|. right'
-        SllOp -> left' `shiftL` right'
-        SrlOp -> left' `shiftR` right'
-        SltOp -> fromEnum (left' < right')
+        SllOp -> left' `shiftL` fromIntegral right'
+        SrlOp -> left' `shiftR` fromIntegral right'
+        SltOp -> fromIntegral . fromEnum $ left' < right'
         XorOp -> left' `xor` right'
         LuiOp -> left' .|. shiftL right' 16
         _     -> left'
@@ -99,35 +101,35 @@ control = proc (c, inst) -> do
 
   returnA -< Control aluSrc' branchAct' memAct' regAct' regWriteSrc' regWriteData'
 
-instMem :: V.Vector Instruction -> SF Int (Int, Instruction)
+instMem :: V.Vector Instruction -> SF UInt (UInt, Instruction)
 instMem mem = proc pc -> do
   newPc <- delay 10 0 -< pc
-  returnA -< (newPc, fromMaybe nop (mem V.!? newPc))
+  returnA -< (newPc, fromMaybe nop (mem V.!? fromIntegral newPc))
 
 data RegComp = RegComp {
-    regData :: Seq Int
-    , regA :: Int
-    , regB :: Int
+    regData :: Seq UInt
+    , regA :: UInt
+    , regB :: UInt
     , deltaReg :: Maybe Int
     } deriving (Eq, Show)
 
-initMem :: Seq Int -> [DataEntry] -> Seq Int
-initMem = foldl (\mem' (DataEntry loc _ val) -> S.update loc val mem')
+initMem :: Seq UInt -> [DataEntry UInt] -> Seq UInt
+initMem = foldl (\mem' (DataEntry loc _ val) -> S.update loc (fromIntegral val) mem')
 
-safeGet :: Seq a -> a -> Int -> a
+safeGet :: Seq a -> a -> UInt -> a
 safeGet xs x i
   | i < 0 = x
-  | i >= length xs = x
-  | otherwise = S.index xs i
+  | fromIntegral i >= length xs = x
+  | otherwise = S.index xs (fromIntegral i)
 
-regMem :: Seq Int -> SF (Control, Int, Int, Int, Int) RegComp
+regMem :: Seq UInt -> SF (Control, UInt, UInt, UInt, UInt) RegComp
 regMem mem = proc (cont, rs', rt', rd', writeData) -> do
   let rDst      = if regWriteDst cont == Rt then rt' else rd'
       doWrite   = regAct cont == Write
 
-  rec mem'  <- delay 10 mem -< if doWrite then S.update rDst writeData mem' else mem'
+  rec mem'  <- delay 10 mem -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
 
-  deltaReg' <- delay 10 Nothing -<  if doWrite then Just rDst else Nothing
+  deltaReg' <- delay 10 Nothing -<  if doWrite then Just (fromIntegral rDst) else Nothing
 
   let (ra, rb)
         | aluSrc cont == Shamt = (rt', rs')
@@ -136,24 +138,24 @@ regMem mem = proc (cont, rs', rt', rd', writeData) -> do
   returnA -< RegComp mem' (safeGet mem' 0 ra) (safeGet mem' 0 rb) deltaReg'
 
 data MemComp = MemComp {
-    memData :: Seq Int
-    , memOutput :: Int
+    memData :: Seq UInt
+    , memOutput :: UInt
     , deltaMem :: Maybe Int
     } deriving (Eq, Show)
 
-mainMem :: Seq Int -> SF (Control, Int, Int) MemComp
+mainMem :: Seq UInt -> SF (Control, UInt, UInt) MemComp
 mainMem mem = proc (cont, address', writeData) -> do
   let doWrite = memAct cont == Write
 
   rec
-    mem'   <- delay 10 mem -< if doWrite then S.update address' writeData mem' else mem'
+    mem'   <- delay 10 mem -< if doWrite then S.update (fromIntegral address') writeData mem' else mem'
     output <- delay 10 0 -< if doWrite then output else safeGet mem' 0 address'
 
-  deltaMem' <- delay 10 Nothing -< if doWrite then Just address' else Nothing
+  deltaMem' <- delay 10 Nothing -< if doWrite then Just (fromIntegral address') else Nothing
 
   returnA -< MemComp mem' output deltaMem'
 
-aluSrcMutex :: SF (Control, Int, Int, Int) Int
+aluSrcMutex :: SF (Control, UInt, UInt, UInt) UInt
 aluSrcMutex = proc (cont, regb, imm, addr) ->
   returnA -< case aluSrc cont of
     Reg       -> regb
@@ -161,13 +163,13 @@ aluSrcMutex = proc (cont, regb, imm, addr) ->
     Address   -> addr
     Shamt     -> imm
 
-writebackMutex :: SF (Control, Int, Int) Int
+writebackMutex :: SF (Control, UInt, UInt) UInt
 writebackMutex = proc (cont, aluOutput, memoryData) ->
   returnA -< case regWriteData cont of
     MemData -> memoryData
     AluOut  -> aluOutput
 
-pcMutex :: SF (Control, Bool, Int, Int, Int, Int) Int
+pcMutex :: SF (Control, Bool, UInt, UInt, UInt, UInt) UInt
 pcMutex = proc (cont, zero, branch, pc4, jump, jumpReg) ->
   returnA -< case branchAct cont of
     PC4     -> pc4

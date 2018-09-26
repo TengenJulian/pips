@@ -2,6 +2,8 @@ module Pips.Instruction
   ( module Pips.Instruction
   ) where
 
+import Pips.Common
+
 data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc | JOpc | JrOpc  deriving (Eq, Show)
 
 instance Enum OpCode where
@@ -29,14 +31,14 @@ data Instruction =
   Instruction {
     opCode :: OpCode
     , instType :: InstructionType
-    , rs :: Int
-    , rt :: Int
-    , rd :: Int
-    , address :: Int
-    , shamt :: Int
+    , rs :: UInt
+    , rt :: UInt
+    , rd :: UInt
+    , address :: UInt
+    , shamt :: UInt
     , aluOp :: AluOp
     , original :: String
-    , immediate :: Int
+    , immediate :: UInt
     , lineNum :: Int
   } deriving (Eq, Show)
 

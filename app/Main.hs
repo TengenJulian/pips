@@ -81,7 +81,7 @@ runWithoutTui arch archSF numCycles = do
 
 run :: String -> IO ()
 run source' = do
-  Assembled reg mem insts endLabelMap <- runEither $ assemble source'
+  Assembled reg mem insts endLabelMap <- runEitherShow $ assemble source'
 
   let arch = init16x16 reg mem insts
       archSF = architecture arch endLabelMap
@@ -237,7 +237,7 @@ main = do
       exitSuccess
 
     ProgAssemblerOutput -> do
-        Assembled rd md ints _ <- runEither $ assemble source'
+        Assembled rd md ints _ <- runEitherShow $ assemble source'
         putStrLn "Reg data:"
         mapM_ print rd
 
@@ -250,7 +250,7 @@ main = do
         exitSuccess
 
     mode -> do
-      Assembled reg mem insts endLabelMap <- runEither $ assemble source'
+      Assembled reg mem insts endLabelMap <- runEitherShow $ assemble source'
       let arch = init16x16 reg mem insts
           archSF = architecture arch endLabelMap
 

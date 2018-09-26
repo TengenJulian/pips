@@ -11,6 +11,7 @@ import Text.Parsec.String
 import qualified Text.Parsec.Token as Tok
 
 import Pips.Instruction ()
+import Pips.Common
 
 data InstructionName =
   AddN
@@ -32,24 +33,23 @@ data InstructionName =
   | LwN
   deriving (Show, Eq)
 
-data RegName = RegAlias String    | RegNum Int deriving (Show, Eq)
-data Label   = LabelName String   | LabelNum Int deriving (Show, Eq)
+data RegName = RegAlias String     | RegNum UInt deriving (Show, Eq)
+data Label   = LabelName String    | LabelNum Int deriving (Show, Eq)
 data MemAddr = MemAddrAlias String | MemAddrNum Int deriving (Show, Eq)
 
-data DataEntry = DataEntry Int (Maybe String) Int deriving (Show, Eq)
+data DataEntry n = DataEntry Int (Maybe String) n deriving (Show, Eq)
 
 data Token =
-  AddToken Int RegName RegName RegName
-  | Reg3Token Int InstructionName RegName RegName RegName
-  -- | SubToken Int RegName RegName RegName
-  -- | AndToken Int RegName RegName RegName
-  -- | XorToken Int RegName RegName RegName
-  -- | SltToken Int RegName RegName RegName
+  Reg3Token Int InstructionName RegName RegName RegName
+  -- Sub Int RegName RegName RegName
+  -- And Int RegName RegName RegName
+  -- Xor Int RegName RegName RegName
+  -- Slt Int RegName RegName RegName
 
   | Reg2iToken Int InstructionName RegName RegName Int
-  -- | AddiToken Int RegName RegName Int
-  -- | SllToken Int RegName RegName Int
-  -- | SrlToken Int RegName RegName Int
+  -- Addi Int RegName RegName Int
+  -- Sll Int RegName RegName Int
+  -- Srl Int RegName RegName Int
 
   | LuiToken Int RegName Int
 
@@ -57,19 +57,18 @@ data Token =
   | JToken Int Label
 
   | BranchToken Int InstructionName RegName RegName Label
-  -- | BeqToken Int RegName RegName Label
-  -- | BneToken Int RegName RegName Label
+  -- Beq Int RegName RegName Label
+  -- Bne Int RegName RegName Label
 
   | MemOpToken Int InstructionName RegName MemAddr RegName
-  -- | SwToken Int RegName MemAddr RegName
-  -- | LwToken Int RegName MemAddr RegName
+  -- Sw Int RegName MemAddr RegName
+  -- Lw Int RegName MemAddr RegName
 
   | LabelToken Int String
   | CommentToken Int String
   deriving (Show, Eq)
 
 tokenLineNum :: Token -> Int
-tokenLineNum (AddToken      l _ _ _ )  = l
 tokenLineNum (Reg3Token     l _ _ _ _) = l
 tokenLineNum (Reg2iToken    l _ _ _ _) = l
 tokenLineNum (LuiToken      l _ _)     = l
@@ -181,7 +180,7 @@ labelRef = (LabelName <$> identifier)
              <|> (LabelNum . fromIntegral <$> posNumber)
 
 parseMemAddr :: Parser MemAddr
-parseMemAddr = (MemAddrAlias <$> identifier) <|> (MemAddrNum <$> posNumber)
+parseMemAddr = (MemAddrAlias <$> identifier) <|> (MemAddrNum . fromIntegral <$> number)
 
 regs3 :: InstructionName -> String -> Parser Token
 regs3 inn opName = Reg3Token
@@ -197,7 +196,7 @@ regs2i inn opName = Reg2iToken
       <*> pure inn
       <*> parseRegName
       <*> (comma >> parseRegName)
-      <*> (comma >> number)
+      <*> (fromIntegral <$> (comma >> number))
 
 branch :: InstructionName -> String -> Parser Token
 branch inn opName = BranchToken
@@ -219,7 +218,7 @@ lui, jr, jump :: Parser Token
 lui = LuiToken
        <$> (reserved "lui" >> lineNum')
        <*> parseRegName
-       <*> (comma >> number)
+       <*> (fromIntegral <$> (comma >> number))
 
 jr = JrToken
       <$> (reserved "jr" >> lineNum')
@@ -250,7 +249,7 @@ parseToken = regs3 AddN "add"
   <|> comment
   <|> parseLabel
 
-staticData :: Parser [DataEntry]
+staticData :: Num n => Parser [DataEntry n]
 staticData = single `endBy` whiteSpace
   where single = do
           location <- posNumber
@@ -258,15 +257,15 @@ staticData = single `endBy` whiteSpace
           lexeme (string "WORD")
 
           alias <- optionMaybe identifier
-          value <- number
+          value <- fromIntegral <$> number
 
           return $ DataEntry location alias value
 
-parseRegData, parseMemData :: Parser [DataEntry]
+parseRegData, parseMemData :: Num n => Parser [DataEntry n]
 parseRegData = try (string ".register") >> whiteSpace >> staticData
 parseMemData = try (string ".memory") >> whiteSpace >> staticData
 
-parseFile :: Parser ([DataEntry], [DataEntry], [Token])
+parseFile :: Parser ([DataEntry Int], [DataEntry Int], [Token])
 parseFile = do
   regData <- fromMaybe [] <$> optionMaybe parseRegData
   memData <- fromMaybe [] <$> optionMaybe parseMemData

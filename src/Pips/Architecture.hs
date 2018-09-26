@@ -9,14 +9,15 @@ import qualified Data.Vector as V
 
 import           FRP.Yampa
 
+import Pips.Common
 import Pips.Components
 import Pips.Instruction
 import Pips.Assembler
 
 -- o is for data. Fairly arbitrairy, but it does prevent names clashes.
 data ArchitectureComp = ArchitectureComp {
-  dMemory :: Seq Int
-  , dRegister :: Seq Int
+  dMemory :: Seq UInt
+  , dRegister :: Seq UInt
   , dInstructions :: V.Vector Instruction
   , dMemoryChange :: Maybe Int
   , dRegisterChange :: Maybe Int
@@ -24,7 +25,7 @@ data ArchitectureComp = ArchitectureComp {
   , dDebug :: String
   } deriving (Show, Eq)
 
-init16x16 :: [DataEntry] -> [DataEntry] -> [Instruction] -> ArchitectureComp
+init16x16 :: [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchitectureComp
 init16x16 reg mem inst = ArchitectureComp {
   dMemory = initMem emptyData mem
   , dRegister = initMem emptyData reg
@@ -48,7 +49,7 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       (pc, inst) <- im -< newPc
       cont     <- control -< (c, inst)
 
-      let done = V.null insts || pc >= V.length insts
+      let done = V.null insts || fromIntegral pc >= V.length insts
 
       regComp  <- register    -< (cont, rs inst, rt inst, rd inst, writeBack)
 
@@ -64,13 +65,13 @@ architecture ArchitectureComp {dMemory = mem, dRegister = reg, dInstructions = i
       newPc    <- delay 10 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
       prevDone <- delay 20 (V.null insts) -< returnA done
 
-    let ln | prevDone         = Nothing
-           | otherwise    =
-             case (endLabelMap V.!? endIndex, insts V.!? pc) of
-               (Just l, _)    -> Just l
-               (_, Just inst) -> Just $ lineNum inst
-               _              -> Nothing
-           where endIndex  = pc - V.length insts
+    let ln | prevDone  = Nothing
+           | otherwise =
+             case (endLabelMap V.!? endIndex, insts V.!? fromIntegral pc) of
+               (Just l, _)     -> Just l
+               (_, Just inst') -> Just $ lineNum inst'
+               _               -> Nothing
+           where endIndex  = fromIntegral pc - V.length insts
 
     let debugMsg = unlines [
             "Clock: " ++ show c

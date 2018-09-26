@@ -38,6 +38,7 @@ import           Lens.Micro.TH
 
 import Pips.Architecture ( ArchitectureComp, dLineNum, dMemory, dRegister,
                            dRegisterChange, dMemoryChange )
+import Pips.Common
 
 import TUI.Table
 
@@ -86,12 +87,12 @@ data AppEvent = VtyEvent V.Event
               | ChangeEvent Int ArchitectureComp
               | DataChangeEvent [DataChange] Int
               | SetDataEvent [Int] [Int]
-              | ReloadEvent String [(String, Int)] [(String, Int)]
-              | LoadMemory [(String, Int)]
-              | LoadRegistry [(String, Int)]
+              | ReloadEvent String [(String, UInt)] [(String, UInt)]
+              | LoadMemory [(String, UInt)]
+              | LoadRegistry [(String, UInt)]
               deriving (Show, Eq)
 
-data DataChange = MemoryChange Int Int | RegisterChange Int Int deriving (Show, Eq)
+data DataChange = MemoryChange Int UInt | RegisterChange Int UInt deriving (Show, Eq)
 
 data AppMode = NormalMode | CycleMode deriving (Show, Eq)
 
@@ -103,7 +104,7 @@ data YampaMessage = CyclesMessage Int
 data NumberFormat = DecimalFormat  | HexFormat   | BinaryFormat deriving (Show, Eq, Enum, Bounded)
 data Focus = MemTable | RegTable | SourceCode deriving (Eq, Show, Enum, Bounded)
 
-data TableCell = StringCell String | IntCell Int | ValueCell Int deriving (Show, Eq)
+data TableCell = StringCell String | IntCell Int | ValueCell UInt deriving (Show, Eq)
 
 makeLenses ''St
 
@@ -130,7 +131,7 @@ drawCell :: NumberFormat -> RowMode -> TableCell -> Widget WidgetId
 drawCell format Highlighted cell  = withAttr highlightAttr $ drawCell format Normal cell
 drawCell _      _ (StringCell s)  = drawLeftAligned $ "  " ++ s
 drawCell _      _ (IntCell n)     = drawLeftAligned $ "  " ++ show n
-drawCell format _ (ValueCell n)   = drawLeftAligned $ "  " ++ fmtNumber format n
+drawCell format _ (ValueCell n)   = drawLeftAligned $ "  " ++ fmtNumber format (fromIntegral n)
 
 drawUI :: St -> [Widget WidgetId]
 drawUI st = case st ^. appMode of
@@ -242,7 +243,7 @@ handleEvent st (T.AppEvent (ChangeEvent cycles archComp)) =
 handleEvent st (T.VtyEvent e) = handleVtyEvent st e
 handleEvent st _              = M.continue st
 
-initialState :: BChan YampaMessage -> String -> [(String, Int)] -> [(String, Int)] -> St
+initialState :: BChan YampaMessage -> String -> [(String, UInt)] -> [(String, UInt)] -> St
 initialState chan src reg mem =
   let src' = lines src
       regTable = makeTable RegTableId RegColId 1 [
