@@ -140,7 +140,7 @@ binary :: Parser Int
 binary = do
   try (string "0b")
   s <- many1 (char '0' <|> char '1')
-  return $ sum [read [d] * 2 ^ e | (d, e) <- zip (reverse s) [0..]]
+  return $ foldl (\acc d -> 2 * acc + read [d]) 0 s
 
 natural, integer :: Parser Integer
 natural = Tok.natural lexer
