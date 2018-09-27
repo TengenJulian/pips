@@ -7,7 +7,7 @@ import           Control.Monad ((<=<))
 
 import qualified Data.Map.Lazy as M
 
-import           Data.List (findIndex, intercalate)
+import           Data.List (findIndex)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Vector as V
 
@@ -55,65 +55,54 @@ validUnsigned numBits n = l <= n && n <= r
   where (l, r) = validUnsignedBounds numBits
 
 expectedRangeMsg :: (Int, Int) -> String
-expectedRangeMsg (l, r) = "Expected value to be in inclusive range " ++ show l ++ "-" ++ show r
+expectedRangeMsg (l, r) = "Expected value to be in inclusive range " ++ show l ++ "-" ++ show r ++ "."
 
 instance Show AssembleError where
   show (ParsecError e) = show e
-  show (InvalidImm l n) = intercalate " "
-    [ "Invalid signed immediate value,"
-    , show n ++ ", at line", show l ++ "."
-    , expectedRangeMsg $ validSignedBounds 16
-    ]
-  show (InvalidSignedImm l n) = intercalate " "
-    [ "Invalid immediate value,"
-    , show n ++ ", at line", show l ++ "."
-    , expectedRangeMsg $ validUnsignedBounds 16
-    ]
-  show (InvalidShamt l n) = intercalate " "
-    [ "Invalid shift amount,"
-    , show n ++ ", at line", show l ++ "."
-    , expectedRangeMsg $ validUnsignedBounds 5
-    ]
-  show (InvalidAddr l n) = intercalate " "
-    [ "Invalid jump addr,"
-    , show n ++ ", at line", show l ++ "."
-    , expectedRangeMsg $ validUnsignedBounds 26
-    ]
-  show (InvalidMemEntry i alias val) = intercalate " "
-    [ "Invalid Data entry value,"
-    , show val ++ aliasMsg alias
-    , expectedRangeMsg $ validSignedBounds 32
-    ]
-    where aliasMsg (Just al) = ", for memory address $" ++ al ++ "."
-          aliasMsg _         = ", for memory address $" ++ show i ++ "."
-  show (InvalidRegEntry i alias val) = intercalate " "
-    [ "Invalid Data entry value,"
-    , show val ++ aliasMsg alias
-    , expectedRangeMsg $ validSignedBounds 32
-    ]
-    where aliasMsg (Just al) = ", for reg $" ++ al ++ "."
-          aliasMsg _         = ", for reg $" ++ show i ++ "."
-  show (UndefinedRegAlias l name) = intercalate " "
-    [ "Undefined reg alias,"
-    , name ++ ", at line", show l ++ "."
-    ]
-  show (UndefinedMemAlias l name) = intercalate " "
-    [ "Undefined mem alias,"
-    , name ++ ", at line", show l ++ "."
-    ]
-  show (UndefinedJumpLabel l name) = intercalate " "
-    [ "Undefined jump label,"
-    , name ++ ", at line", show l ++ "."
-    ]
-  show (InitializingInvalidReg i) = intercalate " "
-    ["Initializing invalid register $" ++ show i ++ "."
-    , "There are only 32 registers."
-    ]
-  show (InvalidReg l i) = intercalate " "
-    ["Invalid register $" ++ show i
-    , ", on line", show l ++ "."
-    , "There are only 32 registers."
-    ]
+  show (InvalidImm l n) =
+    "Invalid signed immediate value, "
+    ++ show n ++ ", at line " ++ show l ++ ". "
+    ++ expectedRangeMsg (validSignedBounds 16)
+  show (InvalidSignedImm l n) =
+    "Invalid immediate value, "
+    ++ show n ++ ", at line " ++ show l ++ ". "
+    ++ expectedRangeMsg (validUnsignedBounds 16)
+  show (InvalidShamt l n) =
+    "Invalid shift amount, "
+    ++ show n ++ ", at line " ++ show l ++ ". "
+    ++ expectedRangeMsg (validUnsignedBounds 5)
+  show (InvalidAddr l n) =
+    "Invalid jump addr, "
+    ++ show n ++ " ++ at line " ++ show l ++ ". "
+    ++ expectedRangeMsg (validUnsignedBounds 26)
+  show (InvalidMemEntry i alias val) =
+    "Invalid Data entry value, "
+    ++ show val ++ aliasMsg alias
+    ++ expectedRangeMsg (validSignedBounds 32)
+    where aliasMsg (Just al) = ", for memory address $" ++ al ++ ". "
+          aliasMsg _         = ", for memory address $" ++ show i ++ ". "
+  show (InvalidRegEntry i alias val) =
+    "Invalid Data entry value, "
+    ++ show val ++ aliasMsg alias
+    ++ expectedRangeMsg (validSignedBounds 32)
+    where aliasMsg (Just al) = ", for reg $" ++ al ++ ". "
+          aliasMsg _         = ", for reg $" ++ show i ++ ". "
+  show (UndefinedRegAlias l name) =
+    "Undefined reg alias, "
+    ++ name ++ ", at line " ++ show l ++ "."
+  show (UndefinedMemAlias l name) =
+    "Undefined mem alias, "
+    ++ name ++ ", at line " ++ show l ++ "."
+  show (UndefinedJumpLabel l name) =
+    "Undefined jump label, "
+    ++ name ++ ", at line " ++ show l ++ "."
+  show (InitializingInvalidReg i) =
+    "Initializing invalid register $" ++ show i ++ ". "
+    ++ "There are only 32 registers."
+  show (InvalidReg l i) =
+    "Invalid register $" ++ show i
+    ++ ", on line " ++ show l ++ ". "
+    ++ "There are only 32 registers."
   show NonZeroRegZero = "Register $0 cannot be initialized to a non-zero value."
 
 removeRegAlias :: M.Map String Int -> Int -> RegName -> Either AssembleError RegName
