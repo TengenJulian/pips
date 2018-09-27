@@ -24,9 +24,9 @@ data ArchComp = ArchComp {
   , archDebug :: String
   } deriving (Show, Eq)
 
-initArch :: [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchComp
-initArch reg mem inst = ArchComp {
-  archMem         = initMem (emptyData 16) mem
+initArch :: Int -> [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchComp
+initArch memSize reg mem inst = ArchComp {
+  archMem         = initMem (emptyData memSize) mem
   , archReg       = initMem (emptyData 32) reg
   , archInsts     = V.fromList inst
   , archMemChange = Nothing

@@ -79,11 +79,11 @@ runWithoutTui arch archSF numCycles = do
   readIORef resultRef >>= print
   exitSuccess
 
-run :: String -> IO ()
-run source' = do
+run :: Int -> String -> IO ()
+run memSize source' = do
   Assembled reg mem insts endLabelMap <- runEitherShow $ assemble source'
 
-  let arch = initArch reg mem insts
+  let arch = initArch memSize reg mem insts
       archSF = architecture arch endLabelMap
 
       matchAlias entries dat = zipWith (\i d -> (M.findWithDefault "" i aliases, d)) [0..] (toList dat)
@@ -158,6 +158,7 @@ data ProgMode =
 
 data CmdArgs = CmdArgs
   { argsSource :: FilePath
+  , argsMemSize :: Int
   , argsProgMod :: ProgMode
   }
   deriving (Eq, Show)
@@ -188,6 +189,12 @@ cmdArgs = CmdArgs
   <$> argument str
     (    metavar "SOURCE_FILE"
       <> help "Assembly file to run" )
+  <*> option auto
+    (    short 'm'
+      <> help "SIZE of memory in 32-bit words"
+      <> value 32
+      <> showDefault
+      <> metavar "SIZE" )
   <*> cmdArgsProgMode
 
 runEither :: Either String a -> IO a
@@ -206,6 +213,9 @@ main = do
           <> header "pips - a simulator for a poor man's MIPS architecture" )
 
   args <- execParser opts
+  when (argsMemSize args <= 0) $ do
+    putStrLn $ "Can only have positive amount of memory"
+    exitFailure
 
   let sourceFile = argsSource args
 
@@ -221,7 +231,7 @@ main = do
 
   case argsProgMod args of
     ProgSim ->
-      run source'
+      run (argsMemSize args) source'
 
     ProgParserOutput -> do
       (rd, md, tokens ) <- runEitherShow $ parse parseFile sourceFile source'
@@ -251,7 +261,7 @@ main = do
 
     mode -> do
       Assembled reg mem insts endLabelMap <- runEitherShow $ assemble source'
-      let arch = initArch reg mem insts
+      let arch = initArch (argsMemSize args) reg mem insts
           archSF = architecture arch endLabelMap
 
       case mode of
