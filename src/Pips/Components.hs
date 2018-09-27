@@ -135,7 +135,7 @@ regMem mem = proc (cont, rs', rt', rd', writeData) -> do
         | aluSrc cont == Shamt = (rt', rs')
         | otherwise            = (rs' ,rt')
 
-  returnA -< RegComp mem' (safeGet mem' 0 ra) (safeGet mem' 0 rb) deltaReg'
+  returnA -< RegComp mem' (safeGet mem' 0xFFFFFFFF ra) (safeGet mem' 0xFFFFFFFF rb) deltaReg'
 
 data MemComp = MemComp {
     memData :: Seq UInt
@@ -149,7 +149,7 @@ mainMem mem = proc (cont, address', writeData) -> do
 
   rec
     mem'   <- delay 10 mem -< if doWrite then S.update (fromIntegral address') writeData mem' else mem'
-    output <- delay 10 0 -< if doWrite then output else safeGet mem' 0 address'
+    output <- delay 10 0 -< if doWrite then output else safeGet mem' 0xFFFFFFFF address'
 
   deltaMem' <- delay 10 Nothing -< if doWrite then Just (fromIntegral address') else Nothing
 
