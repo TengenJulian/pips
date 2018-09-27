@@ -36,6 +36,8 @@ data AssembleError =
   | InvalidRegEntry Int (Maybe String) Int
   | InvalidMemEntry Int (Maybe String) Int
   | NonZeroRegZero
+  | InvalidReg Int UInt
+  | InitializingInvalidReg Int
   deriving (Eq)
 
 maxNBits :: Int -> Int
@@ -58,34 +60,34 @@ expectedRangeMsg (l, r) = "Expected value to be in inclusive range " ++ show l +
 instance Show AssembleError where
   show (ParsecError e) = show e
   show (InvalidImm l n) = intercalate " "
-    [ "Invalid signed immediate value, "
+    [ "Invalid signed immediate value,"
     , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validSignedBounds 16
     ]
   show (InvalidSignedImm l n) = intercalate " "
-    [ "Invalid immediate value, "
+    [ "Invalid immediate value,"
     , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validUnsignedBounds 16
     ]
   show (InvalidShamt l n) = intercalate " "
-    [ "Invalid shift amount, "
+    [ "Invalid shift amount,"
     , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validUnsignedBounds 5
     ]
   show (InvalidAddr l n) = intercalate " "
-    [ "Invalid jump addr, "
+    [ "Invalid jump addr,"
     , show n ++ ", at line", show l ++ "."
     , expectedRangeMsg $ validUnsignedBounds 26
     ]
   show (InvalidMemEntry i alias val) = intercalate " "
-    [ "Invalid Data entry value, "
+    [ "Invalid Data entry value,"
     , show val ++ aliasMsg alias
     , expectedRangeMsg $ validSignedBounds 32
     ]
     where aliasMsg (Just al) = ", for memory address $" ++ al ++ "."
           aliasMsg _         = ", for memory address $" ++ show i ++ "."
   show (InvalidRegEntry i alias val) = intercalate " "
-    [ "Invalid Data entry value, "
+    [ "Invalid Data entry value,"
     , show val ++ aliasMsg alias
     , expectedRangeMsg $ validSignedBounds 32
     ]
@@ -102,6 +104,15 @@ instance Show AssembleError where
   show (UndefinedJumpLabel l name) = intercalate " "
     [ "Undefined jump label,"
     , name ++ ", at line", show l ++ "."
+    ]
+  show (InitializingInvalidReg i) = intercalate " "
+    ["Initializing invalid register $" ++ show i ++ "."
+    , "There are only 32 registers."
+    ]
+  show (InvalidReg l i) = intercalate " "
+    ["Invalid register $" ++ show i
+    , ", on line", show l ++ "."
+    , "There are only 32 registers."
     ]
   show NonZeroRegZero = "Register $0 cannot be initialized to a non-zero value."
 
@@ -197,8 +208,9 @@ uncurry3 f (a, b, c) = f a b c
 convertRegEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
 convertRegEntries = mapM (checkRegZero <=< (mapLeft (uncurry3 InvalidRegEntry) . convertEntry))
   where checkRegZero d@(DataEntry i _ val)
+          | 0 <= i && i < 32   = Right d
           | i == 0 && val /= 0 = Left NonZeroRegZero
-          | otherwise          = Right d
+          | otherwise          = Left $ InitializingInvalidReg i
 
 convertMemEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
 convertMemEntries = mapM (mapLeft (uncurry3 InvalidMemEntry) . convertEntry)
@@ -254,6 +266,18 @@ assembleToken (JToken l (LabelNum l1)) =
 
 assembleToken t = error ("Could not assemble token " ++ show t)
 
+checkRegs :: Instruction -> Either AssembleError Instruction
+checkRegs inst = do
+  let checkReg i
+        | 0 <= i && i < 32  = Right $ ()
+        | otherwise         = Left $ InvalidReg (lineNum inst) i
+
+  checkReg $ rt inst
+  checkReg $ rs inst
+  checkReg $ rd inst
+
+  return inst
+
 assemble :: String -> Either AssembleError Assembled
 assemble source = do
   (regData, memData, tokens') <- mapLeft ParsecError $ parse parseFile "" source
@@ -262,5 +286,5 @@ assemble source = do
   Assembled
     <$> convertRegEntries regData
     <*> convertMemEntries memData
-    <*> mapM assembleToken tokens
+    <*> mapM (checkRegs <=< assembleToken) tokens
     <*> return endLabelMapping

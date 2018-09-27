@@ -83,7 +83,7 @@ run :: String -> IO ()
 run source' = do
   Assembled reg mem insts endLabelMap <- runEitherShow $ assemble source'
 
-  let arch = init16x16 reg mem insts
+  let arch = initArch reg mem insts
       archSF = architecture arch endLabelMap
 
       matchAlias entries dat = zipWith (\i d -> (M.findWithDefault "" i aliases, d)) [0..] (toList dat)
@@ -251,7 +251,7 @@ main = do
 
     mode -> do
       Assembled reg mem insts endLabelMap <- runEitherShow $ assemble source'
-      let arch = init16x16 reg mem insts
+      let arch = initArch reg mem insts
           archSF = architecture arch endLabelMap
 
       case mode of

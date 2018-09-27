@@ -24,17 +24,17 @@ data ArchComp = ArchComp {
   , archDebug :: String
   } deriving (Show, Eq)
 
-init16x16 :: [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchComp
-init16x16 reg mem inst = ArchComp {
-  archMem         = initMem emptyData mem
-  , archReg       = initMem emptyData reg
+initArch :: [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchComp
+initArch reg mem inst = ArchComp {
+  archMem         = initMem (emptyData 16) mem
+  , archReg       = initMem (emptyData 32) reg
   , archInsts     = V.fromList inst
   , archMemChange = Nothing
   , archRegChange = Nothing
   , archLineNum   = Nothing
   , archDebug     = ""
   }
-  where emptyData = S.fromList $ replicate 16 0
+  where emptyData n = S.fromList $ replicate n 0
 
 architecture :: ArchComp -> V.Vector Int -> SF Bool ArchComp
 architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabelMap =
