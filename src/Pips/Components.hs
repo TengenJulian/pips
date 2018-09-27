@@ -125,7 +125,7 @@ safeGet xs x i
 regMem :: Seq UInt -> SF (Control, UInt, UInt, UInt, UInt) RegComp
 regMem mem = proc (cont, rs', rt', rd', writeData) -> do
   let rDst      = if regWriteDst cont == Rt then rt' else rd'
-      doWrite   = regAct cont == Write
+      doWrite   = regAct cont == Write && rDst /= 0
 
   rec mem'  <- delay 10 mem -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
 

@@ -3,6 +3,8 @@ module Pips.Assembler
   , Pips.Parser.DataEntry (..)
   ) where
 
+import           Control.Monad ((<=<))
+
 import qualified Data.Map.Lazy as M
 
 import           Data.List (findIndex, intercalate)
@@ -33,6 +35,7 @@ data AssembleError =
   | UndefinedJumpLabel Int String
   | InvalidRegEntry Int (Maybe String) Int
   | InvalidMemEntry Int (Maybe String) Int
+  | NonZeroRegZero
   deriving (Eq)
 
 maxNBits :: Int -> Int
@@ -100,6 +103,7 @@ instance Show AssembleError where
     [ "Undefined jump label,"
     , name ++ ", at line", show l ++ "."
     ]
+  show NonZeroRegZero = "Register $0 cannot be initialized to a non-zero value."
 
 removeRegAlias :: M.Map String Int -> Int -> RegName -> Either AssembleError RegName
 removeRegAlias _ _ r@(RegNum _) = Right r
@@ -191,7 +195,10 @@ uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 f (a, b, c) = f a b c
 
 convertRegEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
-convertRegEntries = mapM (mapLeft (uncurry3 InvalidRegEntry) . convertEntry)
+convertRegEntries = mapM (checkRegZero <=< (mapLeft (uncurry3 InvalidRegEntry) . convertEntry))
+  where checkRegZero d@(DataEntry i _ val)
+          | i == 0 && val /= 0 = Left NonZeroRegZero
+          | otherwise          = Right d
 
 convertMemEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
 convertMemEntries = mapM (mapLeft (uncurry3 InvalidMemEntry) . convertEntry)

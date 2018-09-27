@@ -77,7 +77,7 @@ instance Enum AluOp where
   fromEnum LuiOp = 0x50
 
 nop :: Instruction
-nop = Instruction ROpc R 0 0 0 0 0 SllOp "" 0 0
+nop = Instruction ROpc R 0 0 0 0 0 AddOp "" 0 0
 
 isBranchInst :: Instruction -> Bool
 isBranchInst inst = opCode inst `elem` [JOpc, BeqOpc, BneOpc] || aluOp inst == JrOp
