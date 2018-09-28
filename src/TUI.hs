@@ -220,19 +220,20 @@ handleEvent st@St {_appMode = CycleMode} (T.VtyEvent ev) = cycleModeHandleVtyEve
 
 handleEvent st (T.AppEvent (LoadMemory mem)) = do
   let (names, vals) = unzip mem
-  M.continue $ st & memory . tableCellT 1 .~ map StringCell names
-                  & memory . tableCellT 2 .~ map ValueCell vals
+  M.continue $ st & memory %~ tableReplaceColumn 1 (V.fromList $ map StringCell names)
+                  & memory %~ tableReplaceColumn 2 (V.fromList $ map ValueCell vals)
 
 handleEvent st (T.AppEvent (LoadRegistry reg)) = do
   let (names, vals) = unzip reg
-  M.continue $ st & register . tableCellT 1 .~ map StringCell names
-                  & register . tableCellT 2 .~ map ValueCell vals
+  M.continue $ st & register %~ tableReplaceColumn 1 (V.fromList $ map StringCell names)
+                  & register %~ tableReplaceColumn 2 (V.fromList $ map ValueCell vals)
 
 handleEvent st (T.AppEvent (ReloadEvent src reg mem)) = M.continue $ initialState (st ^. chanToYampa) src reg mem
 
 handleEvent st (T.AppEvent (ChangeEvent cycles archComp)) =
-  let updateData _   Nothing  = id
-      updateData dat (Just r) = (& tableCellT 2 . ix r .~ ValueCell (S.index dat r)) . flip tableSetHighlight [r]
+  let updateData _   Nothing  t = t
+      updateData dat (Just r) t = t & tableCellT r 2 .~ ValueCell (S.index dat r)
+                                    & tableSetHighlight [r]
 
   in  M.continue $ st & clockCycles %~ (+ cycles)
                       & register %~ updateData  (archReg archComp) (archRegChange archComp)
