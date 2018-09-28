@@ -9,10 +9,10 @@ import qualified Data.Vector as V
 
 import           FRP.Yampa
 
+import Pips.Assembler
 import Pips.Common
 import Pips.Components
 import Pips.Instruction
-import Pips.Assembler
 
 data ArchComp = ArchComp {
   archMem :: Seq UInt

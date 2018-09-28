@@ -12,9 +12,9 @@ import qualified Data.Vector as V
 
 import           FRP.Yampa
 
+import Pips.Assembler
 import Pips.Common
 import Pips.Instruction
-import Pips.Assembler
 
 data Clock = Rising | Falling deriving (Eq, Show, Enum)
 

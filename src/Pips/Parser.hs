@@ -10,8 +10,8 @@ import Text.Parsec.Language (haskellDef)
 import Text.Parsec.String
 import qualified Text.Parsec.Token as Tok
 
-import Pips.Instruction ()
 import Pips.Common
+import Pips.Instruction ()
 
 data InstructionName =
   AddN
