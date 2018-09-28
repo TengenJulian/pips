@@ -27,7 +27,7 @@ data ArchComp = ArchComp {
 initArch :: Int -> [DataEntry UInt] -> [DataEntry UInt] -> [Instruction] -> ArchComp
 initArch memSize reg mem inst = ArchComp {
   archMem         = initMem (emptyData memSize) mem
-  , archReg       = initMem (emptyData 32) reg
+  , archReg       = initMem (emptyData numRegs) reg
   , archInsts     = V.fromList inst
   , archMemChange = Nothing
   , archRegChange = Nothing
@@ -61,8 +61,8 @@ architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabel
 
       let nextPc = if done then pc else pc + 1
 
-      newPc    <- delay 10 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
-      prevDone <- delay 20 (V.null insts) -< returnA done
+      newPc    <- delayHalfCycle 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
+      prevDone <- delayCycle (V.null insts) -< returnA done
 
     let ln | prevDone  = Nothing
            | otherwise =

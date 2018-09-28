@@ -22,9 +22,6 @@ flipClock :: Clock -> Clock
 flipClock Rising = Falling
 flipClock Falling = Rising
 
-delayHalfClock :: a -> SF a a
-delayHalfClock = delay 10
-
 -- TODO: This clock might be broken, as it has no time delay.
 -- This might be the reason, why 2 reacts separate are needed
 -- for a full clock cycle, where each react update the state
@@ -103,7 +100,7 @@ control = proc (c, inst) -> do
 
 instMem :: V.Vector Instruction -> SF UInt (UInt, Instruction)
 instMem mem = proc pc -> do
-  newPc <- delay 10 0 -< pc
+  newPc   <- delayHalfCycle 0 -< pc
   returnA -< (newPc, fromMaybe nop (mem V.!? fromIntegral newPc))
 
 data RegComp = RegComp {
@@ -127,9 +124,9 @@ regMem mem = proc (cont, rs', rt', rd', writeData) -> do
   let rDst      = if regWriteDst cont == Rt then rt' else rd'
       doWrite   = regAct cont == Write && rDst /= 0
 
-  rec mem'  <- delay 10 mem -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
+  rec mem'  <- delayHalfCycle mem     -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
 
-  deltaReg' <- delay 10 Nothing -<  if doWrite then Just (fromIntegral rDst) else Nothing
+  deltaReg' <- delayHalfCycle Nothing -<  if doWrite then Just (fromIntegral rDst) else Nothing
 
   let (ra, rb)
         | aluSrc cont == Shamt = (rt', rs')
@@ -148,10 +145,10 @@ mainMem mem = proc (cont, address', writeData) -> do
   let doWrite = memAct cont == Write
 
   rec
-    mem'   <- delay 10 mem -< if doWrite then S.update (fromIntegral address') writeData mem' else mem'
-    output <- delay 10 0 -< if doWrite then output else safeGet mem' 0xFFFFFFFF address'
+    mem'   <- delayHalfCycle mem -< if doWrite then S.update (fromIntegral address') writeData mem' else mem'
+    output <- delayHalfCycle 0   -< if doWrite then output else safeGet mem' 0xFFFFFFFF address'
 
-  deltaMem' <- delay 10 Nothing -< if doWrite then Just (fromIntegral address') else Nothing
+  deltaMem' <- delayHalfCycle Nothing -< if doWrite then Just (fromIntegral address') else Nothing
 
   returnA -< MemComp mem' output deltaMem'
 
@@ -192,7 +189,7 @@ aluControl = proc (opCode', aluOp') -> do
 
 counter :: SF () Int
 counter = proc _ -> do
-  rec x <- delay 10 0 -< x + 1
+  rec x <- delayHalfCycle 0 -< x + 1
 
   returnA -< x
 
@@ -206,7 +203,6 @@ testMem mem = loopPre (mem, 0) $ proc ((c, i),(mem', output)) -> do
         | otherwise = (output , (mem', output))
   returnA -< result
 
-
 testCircuit :: Eq a => [a] -> SF a b -> [b]
 testCircuit xs sf = embed sf steps
-  where steps = deltaEncode 10 xs
+  where steps = deltaEncode timeHalfCycle xs

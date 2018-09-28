@@ -62,29 +62,29 @@ instance Show AssembleError where
   show (InvalidImm l n) =
     "Invalid signed immediate value, "
     ++ show n ++ ", at line " ++ show l ++ ". "
-    ++ expectedRangeMsg (validSignedBounds 16)
+    ++ expectedRangeMsg (validSignedBounds sizeImm)
   show (InvalidSignedImm l n) =
     "Invalid immediate value, "
     ++ show n ++ ", at line " ++ show l ++ ". "
-    ++ expectedRangeMsg (validUnsignedBounds 16)
+    ++ expectedRangeMsg (validUnsignedBounds sizeImm)
   show (InvalidShamt l n) =
     "Invalid shift amount, "
     ++ show n ++ ", at line " ++ show l ++ ". "
-    ++ expectedRangeMsg (validUnsignedBounds 5)
+    ++ expectedRangeMsg (validUnsignedBounds sizeShamt)
   show (InvalidAddr l n) =
     "Invalid jump addr, "
     ++ show n ++ " ++ at line " ++ show l ++ ". "
-    ++ expectedRangeMsg (validUnsignedBounds 26)
+    ++ expectedRangeMsg (validUnsignedBounds sizeAddr)
   show (InvalidMemEntry i alias val) =
     "Invalid Data entry value, "
     ++ show val ++ aliasMsg alias
-    ++ expectedRangeMsg (validSignedBounds 32)
+    ++ expectedRangeMsg (validSignedBounds sizeWord)
     where aliasMsg (Just al) = ", for memory address $" ++ al ++ ". "
           aliasMsg _         = ", for memory address $" ++ show i ++ ". "
   show (InvalidRegEntry i alias val) =
     "Invalid Data entry value, "
     ++ show val ++ aliasMsg alias
-    ++ expectedRangeMsg (validSignedBounds 32)
+    ++ expectedRangeMsg (validSignedBounds sizeWord)
     where aliasMsg (Just al) = ", for reg $" ++ al ++ ". "
           aliasMsg _         = ", for reg $" ++ show i ++ ". "
   show (UndefinedRegAlias l name) =
@@ -98,11 +98,11 @@ instance Show AssembleError where
     ++ name ++ ", at line " ++ show l ++ "."
   show (InitializingInvalidReg i) =
     "Initializing invalid register $" ++ show i ++ ". "
-    ++ "There are only 32 registers."
+    ++ "There are only " ++ show numRegs ++ " registers."
   show (InvalidReg l i) =
     "Invalid register $" ++ show i
     ++ ", on line " ++ show l ++ ". "
-    ++ "There are only 32 registers."
+    ++ "There are only " ++ show numRegs ++" registers."
   show NonZeroRegZero = "Register $0 cannot be initialized to a non-zero value."
 
 removeRegAlias :: M.Map String Int -> Int -> RegName -> Either AssembleError RegName
@@ -177,15 +177,15 @@ conversionHelper p x e
 
 convertImm, convertSignedImm, convertShamt, convertAddr :: Int -> Int -> Either AssembleError UInt
 
-convertSignedImm l x = conversionHelper (validSigned 16) x $ InvalidSignedImm l x
-convertImm       l x = conversionHelper (validSigned 16) x $ InvalidImm l x
-convertAddr      l x = conversionHelper (validSigned 26) x $ InvalidAddr l x
-convertShamt     l x = conversionHelper (validSigned 5)  x $ InvalidShamt l x
+convertSignedImm l x = conversionHelper (validSigned sizeImm) x $ InvalidSignedImm l x
+convertImm       l x = conversionHelper (validSigned sizeImm) x $ InvalidImm l x
+convertAddr      l x = conversionHelper (validSigned sizeAddr) x $ InvalidAddr l x
+convertShamt     l x = conversionHelper (validSigned sizeShamt)  x $ InvalidShamt l x
 
 convertEntry :: DataEntry Int -> Either (Int, Maybe String, Int) (DataEntry UInt)
 convertEntry (DataEntry i alias val)
-  | validSigned 32 val = Right $ DataEntry i alias (fromIntegral val)
-  | otherwise          = Left (i, alias, val)
+  | validSigned sizeWord val = Right $ DataEntry i alias (fromIntegral val)
+  | otherwise                = Left (i, alias, val)
 
 mapLeft :: (e -> e') -> Either e b -> Either e' b
 mapLeft _ (Right x) = Right x
@@ -197,9 +197,9 @@ uncurry3 f (a, b, c) = f a b c
 convertRegEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
 convertRegEntries = mapM (checkRegZero <=< (mapLeft (uncurry3 InvalidRegEntry) . convertEntry))
   where checkRegZero d@(DataEntry i _ val)
-          | 0 <= i && i < 32   = Right d
-          | i == 0 && val /= 0 = Left NonZeroRegZero
-          | otherwise          = Left $ InitializingInvalidReg i
+          | 0 <= i && i < numRegs = Right d
+          | i == 0 && val /= 0    = Left NonZeroRegZero
+          | otherwise             = Left $ InitializingInvalidReg i
 
 convertMemEntries :: [DataEntry Int] -> Either AssembleError [DataEntry UInt]
 convertMemEntries = mapM (mapLeft (uncurry3 InvalidMemEntry) . convertEntry)
@@ -258,8 +258,8 @@ assembleToken t = error ("Could not assemble token " ++ show t)
 checkRegs :: Instruction -> Either AssembleError Instruction
 checkRegs inst = do
   let checkReg i
-        | 0 <= i && i < 32  = Right $ ()
-        | otherwise         = Left $ InvalidReg (lineNum inst) i
+        | 0 <= i && fromIntegral i < numRegs = Right $ ()
+        | otherwise                          = Left $ InvalidReg (lineNum inst) i
 
   checkReg $ rt inst
   checkReg $ rs inst

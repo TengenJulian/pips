@@ -25,9 +25,10 @@ import           System.Exit
 
 import           Text.Parsec (parse)
 
-import Pips.Parser (parseFile)
 import Pips.Assembler
 import Pips.Architecture
+import Pips.Common
+import Pips.Parser (parseFile)
 
 import TUI
 
@@ -37,7 +38,7 @@ senseInput debug _
   | otherwise    = do
     input <- getLine
     putStrLn $ "input: " ++ input
-    return (10.0, Just debug)
+    return (timeHalfCycle, Just debug)
 
 actuate :: IORef Bool -> IORef a -> Bool -> a -> IO Bool
 actuate doneRef resultRef _ output = do
@@ -73,7 +74,7 @@ runWithoutTui arch archSF numCycles = do
 
   secs <- benchIOAction $
     forM_ [2..numCycles] $
-      return $ react handle' (10, Nothing)
+      return $ react handle' (timeHalfCycle, Nothing)
 
   putStrLn $ unwords ["Simulating for", show numCycles, "cycles took", show secs, "seconds"]
   readIORef resultRef >>= print
@@ -115,8 +116,8 @@ run memSize source' = do
 
       CyclesMessage c -> do
         forM_ [1..c] $ \_ -> do
-            react handle (10, Nothing)
-            react handle (10, Nothing)
+            react handle (timeHalfCycle, Nothing)
+            react handle (timeHalfCycle, Nothing)
         archComp' <- readIORef resultRef
 
         when (c > 1) $ do
