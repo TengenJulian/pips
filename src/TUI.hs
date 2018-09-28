@@ -144,7 +144,7 @@ drawUI st = case st ^. appMode of
 
         editBox = B.borderWithLabel (str " Cycles per Step ")  . hLimit 50 $
           C.hCenter errorWidget
-          <=> E.renderEditor False editor
+          <=> E.renderEditor (str . unlines) False editor
           <=> emptyWidget
 
         highlightFocus True  = withAttr focusAttr
@@ -260,7 +260,7 @@ initialState chan src reg mem =
                 (" ", 10000,  V.fromList . map StringCell $ src')
                ]
 
-      editor = E.editor CycleEditorId (str . unlines) (Just 1) "1"
+      editor = E.editor CycleEditorId (Just 1) "1"
   in St {
     _memory = memTable
     , _register = regTable
