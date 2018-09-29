@@ -19,7 +19,6 @@ import           Graphics.Vty.Config (defaultConfig)
 
 import           Options.Applicative
 
-import           System.Directory
 import           System.CPUTime
 import           System.Exit
 
@@ -219,12 +218,6 @@ main = do
     exitFailure
 
   let sourceFile = argsSource args
-
-  b <- doesFileExist sourceFile
-  unless b $ do
-    putStrLn $ "File does not exist: " ++ sourceFile
-    exitFailure
-
   putStrLn $ "source file: " ++ sourceFile
 
   s <- readFile sourceFile

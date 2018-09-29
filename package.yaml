@@ -32,7 +32,6 @@ dependencies:
 - text
 - containers
 - optparse-applicative
-- directory
 
 library:
   source-dirs: src
@@ -45,6 +44,6 @@ executables:
     - -threaded
     - -rtsopts
     - -Wall
-    - -fwarn-unused-do-bind
+    - -fno-warn-unused-do-bind
     dependencies:
     - pips

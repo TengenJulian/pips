@@ -26,19 +26,18 @@ intToOpCode 0x05 = BneOpc
 intToOpCode 0x02 = JOpc
 intToOpCode _    = ROpc
 
-data Instruction =
-  Instruction {
-    opCode :: OpCode
-    , instType :: InstructionType
-    , rs :: UInt
-    , rt :: UInt
-    , rd :: UInt
-    , address :: UInt
-    , shamt :: UInt
-    , aluOp :: AluOp
-    , original :: String
-    , immediate :: UInt
-    , lineNum :: Int
+data Instruction = Instruction
+  { opCode :: OpCode
+  , instType :: InstructionType
+  , rs :: UInt
+  , rt :: UInt
+  , rd :: UInt
+  , address :: UInt
+  , shamt :: UInt
+  , aluOp :: AluOp
+  , original :: String
+  , immediate :: UInt
+  , lineNum :: Int
   } deriving (Eq, Show)
 
 data InstructionType = R | I | J deriving (Show, Eq)
@@ -72,7 +71,7 @@ intToAluOp 0x02 = SrlOp
 intToAluOp _    = SllOp
 
 nop :: Instruction
-nop = Instruction ROpc R 0 0 0 0 0 AddOp "" 0 0
+nop = Instruction ROpc R 0 0 0 0 0 SllOp "" 0 0
 
 isBranchInst :: Instruction -> Bool
 isBranchInst inst = opCode inst `elem` [JOpc, BeqOpc, BneOpc] || aluOp inst == JrOp

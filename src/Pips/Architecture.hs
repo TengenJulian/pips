@@ -45,8 +45,8 @@ architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabel
   in proc debug -> do
     c <- clock -< Rising
     rec
-      (pc, inst) <- im -< newPc
-      cont     <- control -< (c, inst)
+      (pc, inst) <- im      -< newPc
+      cont       <- control -< (c, inst)
 
       let done = V.null insts || fromIntegral pc >= V.length insts
 
@@ -56,13 +56,13 @@ architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabel
       aluOp'         <- aluControl  -< (opCode inst, aluOp inst)
       (result, zero) <- alu         -< (aluOp', regA regComp, regSrc2)
 
-      memComp <- memory -< (cont, result, regB regComp)
+      memComp   <- memory         -< (cont, result, regB regComp)
       writeBack <- writebackMutex -< (cont, result, memOutput memComp)
 
       let nextPc = if done then pc else pc + 1
 
       newPc    <- delayHalfCycle 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
-      prevDone <- delayCycle (V.null insts) -< returnA done
+      prevDone <- delayCycle (V.null insts)     -< returnA done
 
     let ln | prevDone  = Nothing
            | otherwise =

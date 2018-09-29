@@ -20,8 +20,8 @@ import Graphics.Vty.Input.Events
 import Lens.Micro
 import Lens.Micro.TH
 
-data Table n h e = Table  {
-  _tableName :: n
+data Table n h e = Table
+  { _tableName :: n
   , _rowWithHighlights :: [Int]
   , _tableLength :: Int
   , _tableSelHighlightDisabled :: Bool

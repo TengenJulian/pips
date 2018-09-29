@@ -22,10 +22,6 @@ flipClock :: Clock -> Clock
 flipClock Rising = Falling
 flipClock Falling = Rising
 
--- TODO: This clock might be broken, as it has no time delay.
--- This might be the reason, why 2 reacts separate are needed
--- for a full clock cycle, where each react update the state
--- of the clock.
 clock :: SF Clock Clock
 clock = loopPre Falling $ proc (_, state) ->
   returnA -< (flipClock state, flipClock state)
@@ -103,12 +99,12 @@ instMem mem = proc pc -> do
   newPc   <- delayHalfCycle 0 -< pc
   returnA -< (newPc, fromMaybe nop (mem V.!? fromIntegral newPc))
 
-data RegComp = RegComp {
-    regData :: Seq UInt
-    , regA :: UInt
-    , regB :: UInt
-    , deltaReg :: Maybe Int
-    } deriving (Eq, Show)
+data RegComp = RegComp
+  { regData :: Seq UInt
+  , regA :: UInt
+  , regB :: UInt
+  , deltaReg :: Maybe Int
+  } deriving (Eq, Show)
 
 initMem :: Seq UInt -> [DataEntry UInt] -> Seq UInt
 initMem = foldl (\mem' (DataEntry loc _ val) -> S.update loc (fromIntegral val) mem')
@@ -124,7 +120,7 @@ regMem mem = proc (cont, rs', rt', rd', writeData) -> do
   let rDst      = if regWriteDst cont == Rt then rt' else rd'
       doWrite   = regAct cont == Write && rDst /= 0
 
-  rec mem'  <- delayHalfCycle mem     -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
+  rec mem' <- delayHalfCycle mem -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
 
   deltaReg' <- delayHalfCycle Nothing -<  if doWrite then Just (fromIntegral rDst) else Nothing
 
@@ -134,11 +130,11 @@ regMem mem = proc (cont, rs', rt', rd', writeData) -> do
 
   returnA -< RegComp mem' (safeGet mem' 0xFFFFFFFF ra) (safeGet mem' 0xFFFFFFFF rb) deltaReg'
 
-data MemComp = MemComp {
-    memData :: Seq UInt
-    , memOutput :: UInt
-    , deltaMem :: Maybe Int
-    } deriving (Eq, Show)
+data MemComp = MemComp
+  { memData :: Seq UInt
+  , memOutput :: UInt
+  , deltaMem :: Maybe Int
+  } deriving (Eq, Show)
 
 mainMem :: Seq UInt -> SF (Control, UInt, UInt) MemComp
 mainMem mem = proc (cont, address', writeData) -> do

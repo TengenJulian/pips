@@ -68,40 +68,38 @@ widgetIdToInt (EditorColId n) = (3, n)
 instance Ord WidgetId where
   compare = compare `F.on` widgetIdToInt
 
-data St =
-    St {
-         _memory       :: Table WidgetId String TableCell
-       , _register     :: Table WidgetId String TableCell
-       , _source       :: Table WidgetId String TableCell
-       , _widgetFocus  :: Focus
-       , _numberFormat :: NumberFormat
-       , _clockCycles  :: Int
-       , _appMode      :: AppMode
-       , _chanToYampa  :: BChan YampaMessage
-       , _cycleEditor  :: E.Editor String WidgetId
-       , _cycleStepSize :: Int
-       , _errorMsg     :: Text
-       }
+data St = St
+  { _memory       :: Table WidgetId String TableCell
+  , _register     :: Table WidgetId String TableCell
+  , _source       :: Table WidgetId String TableCell
+  , _widgetFocus  :: Focus
+  , _numberFormat :: NumberFormat
+  , _clockCycles  :: Int
+  , _appMode      :: AppMode
+  , _chanToYampa  :: BChan YampaMessage
+  , _cycleEditor  :: E.Editor String WidgetId
+  , _cycleStepSize :: Int
+  , _errorMsg     :: Text
+  }
 
-data AppEvent = VtyEvent V.Event
-              | ChangeEvent Int ArchComp
-              | DataChangeEvent [DataChange] Int
-              | SetDataEvent [Int] [Int]
-              | ReloadEvent String [(String, UInt)] [(String, UInt)]
-              | LoadMemory [(String, UInt)]
-              | LoadRegistry [(String, UInt)]
-              deriving (Show, Eq)
+data AppEvent =
+  VtyEvent V.Event
+  | ChangeEvent Int ArchComp
+  | DataChangeEvent [DataChange] Int
+  | SetDataEvent [Int] [Int]
+  | ReloadEvent String [(String, UInt)] [(String, UInt)]
+  | LoadMemory [(String, UInt)]
+  | LoadRegistry [(String, UInt)]
+  deriving (Show, Eq)
 
 data DataChange = MemoryChange Int UInt | RegisterChange Int UInt deriving (Show, Eq)
 
 data AppMode = NormalMode | CycleMode deriving (Show, Eq)
 
-data YampaMessage = CyclesMessage Int
-                  | QuitMessage
-                  | RestartMessage
-                   deriving (Show, Eq)
+data YampaMessage = CyclesMessage Int | QuitMessage | RestartMessage deriving (Show, Eq)
 
-data NumberFormat = DecimalFormat  | HexFormat   | BinaryFormat deriving (Show, Eq, Enum, Bounded)
+data NumberFormat = DecimalFormat | HexFormat | BinaryFormat deriving (Show, Eq, Enum, Bounded)
+
 data Focus = MemTable | RegTable | SourceCode deriving (Eq, Show, Enum, Bounded)
 
 data TableCell = StringCell String | IntCell Int | ValueCell UInt deriving (Show, Eq)
@@ -184,8 +182,8 @@ sendYampaMsg st = liftIO . writeBChan (st ^. chanToYampa)
 handleVtyEvent :: St -> V.Event -> T.EventM WidgetId (T.Next St)
 handleVtyEvent st e =
     case e of
-        V.EvKey (V.KChar 'q') [] -> sendYampaMsg st QuitMessage >> M.halt st
-        V.EvKey V.KEsc [] -> M.halt st
+        V.EvKey (V.KChar 'q') []  -> sendYampaMsg st QuitMessage >> M.halt st
+        V.EvKey V.KEsc []         -> M.halt st
         V.EvKey (V.KChar '\t') [] -> M.continue $ st & widgetFocus  %~ cycleEnum
         V.EvKey (V.KChar 'f')  [] -> M.continue $ st & numberFormat %~ cycleEnum
         V.EvKey (V.KChar 'N')  [] -> M.continue $ st & appMode .~ CycleMode
@@ -262,19 +260,19 @@ initialState chan src reg mem =
                ]
 
       editor = E.editor CycleEditorId (Just 1) "1"
-  in St {
-    _memory = memTable
-    , _register = regTable
-    , _source = sourceTable
-    , _widgetFocus = SourceCode
-    , _numberFormat = DecimalFormat
-    , _clockCycles = 0
-    , _appMode = NormalMode
-    , _chanToYampa = chan
-    , _cycleEditor = editor
-    , _cycleStepSize = 1
-    , _errorMsg = ""
-    }
+  in St
+     { _memory = memTable
+     , _register = regTable
+     , _source = sourceTable
+     , _widgetFocus = SourceCode
+     , _numberFormat = DecimalFormat
+     , _clockCycles = 0
+     , _appMode = NormalMode
+     , _chanToYampa = chan
+     , _cycleEditor = editor
+     , _cycleStepSize = 1
+     , _errorMsg = ""
+     }
 
 customAttr :: A.AttrName
 customAttr = L.listSelectedAttr <> "custom"
@@ -299,10 +297,10 @@ theMap = A.attrMap V.defAttr
     ]
 
 theApp :: M.App St AppEvent WidgetId
-theApp =
-    M.App { M.appDraw = drawUI
-          , M.appChooseCursor = M.showFirstCursor
-          , M.appHandleEvent = handleEvent
-          , M.appStartEvent = return
-          , M.appAttrMap = const theMap
-          }
+theApp = M.App
+  { M.appDraw = drawUI
+  , M.appChooseCursor = M.showFirstCursor
+  , M.appHandleEvent = handleEvent
+  , M.appStartEvent = return
+  , M.appAttrMap = const theMap
+  }
