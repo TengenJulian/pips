@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
-module TUI
-  ( module TUI
-  , module TUI.Table
+module Tui
+  ( module Tui
+  , module Tui.Table
   ) where
 
 import qualified Brick.AttrMap as A
@@ -40,7 +40,7 @@ import Pips.Architecture ( ArchComp, archLineNum, archMem, archReg,
                            archRegChange, archMemChange )
 import Pips.Common
 
-import TUI.Table
+import Tui.Table
 
 data WidgetId =
   MemTableId

@@ -3,8 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module TUI.Table
-  ( module TUI.Table
+module Tui.Table
+  ( module Tui.Table
   ) where
 
 import Brick.Types

@@ -30,7 +30,7 @@ import Pips.Architecture
 import Pips.Common
 import Pips.Parser (parseFile)
 
-import TUI
+import Tui
 
 senseInput :: Bool -> Bool -> IO (DTime, Maybe Bool)
 senseInput debug _
