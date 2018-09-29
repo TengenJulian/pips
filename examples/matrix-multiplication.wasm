@@ -1,0 +1,82 @@
+.register
+0: WORD zero  0
+1: WORD i     0
+2: WORD k     0
+3: WORD s     2
+4: WORD off   0
+5: WORD temp  0
+6: WORD temp2 0
+7: WORD index 0
+8: WORD sum   0
+
+.memory
+0: WORD result 0
+1: WORD A 1
+2: WORD   2
+3: WORD   3
+4: WORD   4
+
+5: WORD B 1
+6: WORD   2
+7: WORD   3
+8: WORD   4
+
+9:  WORD C 0
+10: WORD   0
+11: WORD   0
+12: WORD   0
+
+# for i in 0..(s - 1)
+for1:
+  slt $temp, $i, $s
+  bne $temp, $zero, endfor1
+
+  # for k in 0..(s - 1)
+  addi $k, $zero, 0
+  for2:
+    slt $temp, $k, $s
+    bne $temp, $zero, endfor2
+    addi $sum, $zero, 0
+
+    # for off in 0..(s - 1)
+    addi $off, $zero, 0
+    for3:
+      slt $temp, $off, $s
+      bne $temp, $zero, endfor3
+
+      addi $index, $zero, 0
+      mult $index, $i, $s
+      add $index, $index, $off
+
+      # temp = A[i, off]
+      lw $temp, A, $index
+
+      addi $index, $zero, 0
+      mult $index, $off, $s
+      add $index, $index, $k
+
+      # temp2 = B[off, j]
+      lw $temp2, B, $index
+
+      # sum = A[i, off] * B[off, j]
+      mult $temp, $temp, $temp2
+      add $sum, $sum, $temp
+
+      addi $off, $off, 1
+      j for3
+    endfor3:
+
+    addi $index, $zero, 0
+    mult $index, $i, $s
+    add $index, $index, $k
+
+    # C[i, j] = sum
+    sw $sum, C, $index
+
+    addi $k, $k, 1
+    j for2
+  endfor2:
+
+  addi $i, $i, 1
+  j for1
+endfor1:

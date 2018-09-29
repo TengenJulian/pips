@@ -1,0 +1,20 @@
+.register
+0: WORD zero    0
+1: WORD pat     0b10101
+2: WORD light   0
+3: WORD temp    0
+4: WORD mask    1
+
+.memory
+0: WORD result 0
+
+add $light, $light, $pat
+
+loop:
+and $temp, $mask, $light
+sll $temp, $temp, 31
+
+srl $light, $light, 1
+or $light, $light, $temp
+
+j loop
