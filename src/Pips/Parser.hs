@@ -176,8 +176,7 @@ parseLabel = do
   return (LabelToken ln label')
 
 labelRef :: Parser Label
-labelRef = (LabelName <$> identifier)
-             <|> (LabelNum . fromIntegral <$> posNumber)
+labelRef = LabelName <$> identifier
 
 parseMemAddr :: Parser MemAddr
 parseMemAddr = (MemAddrAlias <$> identifier) <|> (MemAddrNum . fromIntegral <$> number)
@@ -271,5 +270,7 @@ parseFile = do
   memData <- fromMaybe [] <$> optionMaybe parseMemData
 
   tokens' <- parseToken `endBy` whiteSpace
+
+  eof
 
   return (regData, memData, tokens')
