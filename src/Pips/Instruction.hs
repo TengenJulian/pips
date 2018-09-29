@@ -4,7 +4,7 @@ module Pips.Instruction
 
 import Pips.Common
 
-data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc | JOpc | JrOpc  deriving (Eq, Show)
+data OpCode = ROpc | AddiOpc | LuiOpc | LwOpc | SwOpc | BeqOpc | BneOpc | JOpc deriving (Eq, Show)
 
 instance Enum OpCode where
   toEnum 0x00 = ROpc
@@ -15,8 +15,6 @@ instance Enum OpCode where
   toEnum 0x04 = BeqOpc
   toEnum 0x05 = BneOpc
   toEnum 0x02 = JOpc
-
-  -- TODO: Missing opcode for JROpc
 
   fromEnum ROpc   = 0x00
   fromEnum AddiOpc= 0x0c

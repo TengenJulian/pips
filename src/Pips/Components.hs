@@ -67,7 +67,7 @@ control = proc (c, inst) -> do
   let branchAct'
         | opCode inst `elem` [BeqOpc, BneOpc] = Branch
         | opCode inst == JOpc  = Jump
-        | opCode inst == JrOpc = JumpReg
+        | aluOp inst  == JrOp  = JumpReg
         | otherwise            = PC4
 
       -- how are we going to deal with the difference between immediate, shamt, address
