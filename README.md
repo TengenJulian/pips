@@ -1,12 +1,12 @@
 # PIPS - A Poorman's version of the MIPS Architecture
 This is a simulation of a simplified single cycle MIPS Architecture written in Haskell.
 
-# Installation
+## Installation
 Installation requires stack. To build use the following.
 ```
 stack build
 ```
-# Usage
+## Usage
 The program can be executed with `stack exec pips --`. For usage see below.
 
 ```
@@ -27,7 +27,7 @@ Available options:
 
 ```
 
-# Supported instructions
+## Supported instructions
 The table below shows which instruction are supported and their semantics. 
 For example assembly files, see the `examples` folder.
 
@@ -50,3 +50,6 @@ For example assembly files, see the `examples` folder.
 | bne \<reg\>, \<reg\>, \<label\> | bne $1, $2, Loop      | jump to Loop if $1 != $2               |
 | j \<label\>                     | j Exit                | jump to label Exit                     |
 | jr \<reg\>                      | jr $3                 | jump to instruction $3                 |
+
+## Screenshot
+![](screenshot/pips.png)
