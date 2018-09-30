@@ -1,6 +1,6 @@
 name:                pips
 version:             0.1.0.0
-github:              "TengenJulian/Haskell-Download-Manager"
+github:              "TengenJulian/pips"
 license:             BSD3
 author:              "David Veenstra"
 maintainer:          "davidjulianveenstra@gmail.com"
