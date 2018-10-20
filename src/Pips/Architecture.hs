@@ -43,26 +43,26 @@ architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabel
       memory = mainMem mem
 
   in proc debug -> do
-    c <- clock -< Rising
+    clk <- clock -< Rising
     rec
-      (pc, inst) <- im      -< newPc
-      cont       <- control -< (c, inst)
+      (pc, inst) <- im      -< (clk, newPc)
+      cont       <- control -< (clk, inst)
 
       let done = V.null insts || fromIntegral pc >= V.length insts
 
-      regComp  <- register    -< (cont, rs inst, rt inst, rd inst, writeBack)
+      regComp  <- register -< (clk, cont, rs inst, rt inst, rd inst, writeBack)
 
       regSrc2        <- aluSrcMutex -< (cont, regB regComp, immediate inst, address inst)
       aluOp'         <- aluControl  -< (opCode inst, aluOp inst)
       (result, zero) <- alu         -< (aluOp', regA regComp, regSrc2)
 
-      memComp   <- memory         -< (cont, result, regB regComp)
+      memComp   <- memory         -< (clk, cont, result, regB regComp)
       writeBack <- writebackMutex -< (cont, result, memOutput memComp)
 
       let nextPc = if done then pc else pc + 1
 
-      newPc    <- delayHalfCycle 0 <<< pcMutex  -< (cont, zero, address inst, nextPc, address inst, regA regComp)
-      prevDone <- delayCycle (V.null insts)     -< returnA done
+      newPc    <- clocked Falling 0 pcMutex -< (clk, (cont, zero, address inst, nextPc, address inst, regA regComp))
+      prevDone <- delayCycle (V.null insts) -< returnA done
 
     let ln | prevDone  = Nothing
            | otherwise =
@@ -72,9 +72,8 @@ architecture ArchComp {archMem = mem, archReg = reg, archInsts = insts} endLabel
                _               -> Nothing
            where endIndex  = fromIntegral pc - V.length insts
 
-    let debugMsg = unlines [
-            "Clock: " ++ show c
-            , show inst
+        debugMsg = unlines [
+            show inst
             , show cont
             , show regComp
             , show memComp

@@ -22,7 +22,7 @@ flipClock :: Clock -> Clock
 flipClock Rising = Falling
 flipClock Falling = Rising
 
-clock :: SF Clock Clock
+clock :: SF a Clock
 clock = loopPre Falling $ proc (_, state) ->
   returnA -< (flipClock state, flipClock state)
 
@@ -94,10 +94,10 @@ control = proc (c, inst) -> do
 
   returnA -< Control aluSrc' branchAct' memAct' regAct' regWriteSrc' regWriteData'
 
-instMem :: V.Vector Instruction -> SF UInt (UInt, Instruction)
-instMem mem = proc pc -> do
-  newPc   <- delayHalfCycle 0 -< pc
-  returnA -< (newPc, fromMaybe nop (mem V.!? fromIntegral newPc))
+instMem :: V.Vector Instruction -> SF (Clock, UInt) (UInt, Instruction)
+instMem mem = clocked Rising (0, nop) $ proc (pc) -> do
+  let inst = fromMaybe nop $ mem V.!? fromIntegral pc
+  returnA -< (pc, inst)
 
 data RegComp = RegComp
   { regData :: Seq UInt
@@ -115,20 +115,28 @@ safeGet xs x i
   | fromIntegral i >= length xs = x
   | otherwise = S.index xs (fromIntegral i)
 
-regMem :: Seq UInt -> SF (Control, UInt, UInt, UInt, UInt) RegComp
-regMem mem = proc (cont, rs', rt', rd', writeData) -> do
-  let rDst      = if regWriteDst cont == Rt then rt' else rd'
-      doWrite   = regAct cont == Write && rDst /= 0
+regMem :: Seq UInt -> SF (Clock, Control, UInt, UInt, UInt, UInt) RegComp
+regMem mem = loopPre (RegComp mem 0 0 Nothing )$ proc ((clk, cont, rs', rt', rd', writeData), oldRegComp) -> do
+  let RegComp oldMem oldOutA oldOutB prevDelta = oldRegComp
 
-  rec mem' <- delayHalfCycle mem -< if doWrite then S.update (fromIntegral rDst) writeData mem' else mem'
+      rDst = if regWriteDst cont == Rt then rt' else rd'
+      doWrite = regAct cont == Write && rDst > 0
 
-  deltaReg' <- delayHalfCycle Nothing -<  if doWrite then Just (fromIntegral rDst) else Nothing
-
-  let (ra, rb)
+      (ra, rb)
         | aluSrc cont == Shamt = (rt', rs')
         | otherwise            = (rs' ,rt')
 
-  returnA -< RegComp mem' (safeGet mem' 0xFFFFFFFF ra) (safeGet mem' 0xFFFFFFFF rb) deltaReg'
+      newMem = S.update (fromIntegral rDst) writeData oldMem
+
+      newRegComp
+        | clk == Rising && regAct cont == Read =
+            RegComp oldMem (safeGet oldMem 0xFFFFFFFF ra) (safeGet oldMem 0xFFFFFFFF rb) prevDelta
+        | clk == Falling && doWrite =
+            RegComp newMem oldOutA oldOutB (Just (fromIntegral rDst))
+        | otherwise =
+          oldRegComp
+
+  returnA -< (newRegComp, newRegComp)
 
 data MemComp = MemComp
   { memData :: Seq UInt
@@ -136,17 +144,22 @@ data MemComp = MemComp
   , deltaMem :: Maybe Int
   } deriving (Eq, Show)
 
-mainMem :: Seq UInt -> SF (Control, UInt, UInt) MemComp
-mainMem mem = proc (cont, address', writeData) -> do
-  let doWrite = memAct cont == Write
+mainMem :: Seq UInt -> SF (Clock, Control, UInt, UInt) MemComp
+mainMem mem = loopPre (MemComp mem 0 Nothing) $ proc ((clk, cont, address', writeData), oldMemComp) -> do
+  let MemComp prevMem prevOut prevDelta = oldMemComp
 
-  rec
-    mem'   <- delayHalfCycle mem -< if doWrite then S.update (fromIntegral address') writeData mem' else mem'
-    output <- delayHalfCycle 0   -< if doWrite then output else safeGet mem' 0xFFFFFFFF address'
+      memComp
+        | clk == Falling && memAct cont == Write =
+          MemComp (S.update (fromIntegral address') writeData prevMem)
+                  prevOut
+                  (Just (fromIntegral address'))
+        | clk == Rising && memAct cont == Read =
+          MemComp prevMem
+                  (safeGet prevMem 0xFFFFFFFF address')
+                  prevDelta
+        | otherwise = oldMemComp
 
-  deltaMem' <- delayHalfCycle Nothing -< if doWrite then Just (fromIntegral address') else Nothing
-
-  returnA -< MemComp mem' output deltaMem'
+  returnA -< (memComp, memComp)
 
 aluSrcMutex :: SF (Control, UInt, UInt, UInt) UInt
 aluSrcMutex = proc (cont, regb, imm, addr) ->
@@ -183,21 +196,14 @@ aluControl = proc (opCode', aluOp') -> do
         | otherwise          = SllOp
   returnA -< result
 
-counter :: SF () Int
-counter = proc _ -> do
-  rec x <- delayHalfCycle 0 -< x + 1
-
-  returnA -< x
-
-clockSF :: SF () Clock
-clockSF = counter >>> arr (toEnum . (`mod` 2))
-
-testMem :: [Int] -> SF (Clock, Int ) Int
-testMem mem = loopPre (mem, 0) $ proc ((c, i),(mem', output)) -> do
-  let result
-        | c == Rising = (mem' !! i, (mem', mem' !! i))
-        | otherwise = (output , (mem', output))
-  returnA -< result
+clocked :: Clock -> b -> SF a b -> SF (Clock, a) b
+clocked clk' b f = loopPre b $ proc ((clk, x), prev) ->
+  if clk == clk'
+  then do
+      y <- f -< x
+      returnA -< (y, y)
+  else
+      returnA -< (prev, prev)
 
 testCircuit :: Eq a => [a] -> SF a b -> [b]
 testCircuit xs sf = embed sf steps
