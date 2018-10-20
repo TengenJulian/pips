@@ -232,11 +232,14 @@ handleEvent st (T.AppEvent (ChangeEvent cycles archComp)) =
   let updateData _   Nothing  t = t
       updateData dat (Just r) t = t & tableCellT r 2 .~ ValueCell (S.index dat r)
                                     & tableSetHighlight [r]
+      lnM
+        | st ^. clockCycles > 0 = archLineNum archComp
+        | otherwise             = Nothing
 
   in  M.continue $ st & clockCycles %~ (+ cycles)
                       & register %~ updateData  (archReg archComp) (archRegChange archComp)
                       & memory   %~ updateData  (archMem archComp) (archMemChange archComp)
-                      & source   %~ tableMoveTo (archLineNum archComp)
+                      & source   %~ tableMoveTo (lnM)
 
 handleEvent st (T.VtyEvent e) = handleVtyEvent st e
 handleEvent st _              = M.continue st

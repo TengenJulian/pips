@@ -113,11 +113,13 @@ run memSize source' = do
         react handle (0, Nothing)
         return ()
 
+      CyclesMessage 0 -> return ()
       CyclesMessage c -> do
-        forM_ [1..c] $ \_ -> do
-            react handle (timeHalfCycle, Nothing)
+        forM_ [1..2 * c - 1] $ \_ -> do
             react handle (timeHalfCycle, Nothing)
         archComp' <- readIORef resultRef
+
+        react handle (timeHalfCycle, Nothing)
 
         when (c > 1) $ do
           let regPairs = matchAliasReg $ archReg archComp'
